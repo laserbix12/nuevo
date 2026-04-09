@@ -98,8 +98,35 @@ async function inicializarBaseDeDatos() {
 
 // ... (Todas tus rutas /api/auth, /api/tareas, etc. se mantienen)
 
+async function crearBaseDatosIfNotExists() {
+  const poolTemporal = mysql.createPool({
+    host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+    port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
+    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+    password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+    waitForConnections: true,
+    connectionLimit: 1,
+    queueLimit: 0,
+  });
+
+  try {
+    const connTemp = await poolTemporal.getConnection();
+    const dbName = process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
+    await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+    console.log(`✅ Base de datos "${dbName}" lista`);
+    connTemp.release();
+    await poolTemporal.end();
+  } catch (error) {
+    console.error('❌ No se pudo crear la base de datos:', error);
+    throw error;
+  }
+}
+
 async function iniciarServidor() {
   try {
+    // Primero crear la BD si no existe
+    await crearBaseDatosIfNotExists();
+
     const connection = await pool.getConnection();
     console.log('✅ Conectado a la base de datos MySQL');
     connection.release();
