@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tarea Fácil</title>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; }
+
+    header { background: purple; color: white; text-align: center; padding: 10px; }
+
+    .contenido { display: flex; flex: 1; }
+
+    aside { width: 150px; background: #ddd; padding: 10px; }
+    .usuario { padding: 6px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; }
+    .usuario:hover { background: #bbb; }
+    .usuario.activo { background: #aaa; font-weight: bold; }
+
+    main { flex: 1; padding: 20px; }
+    .tarea { border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+    .tarea h3 { margin: 0 0 4px; }
+    .tarea small { color: gray; }
+    .tarea p { margin: 8px 0; }
+    button { padding: 6px 14px; cursor: pointer; }
+    .btn-add { background: purple; color: white; border: none; border-radius: 4px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h2>TAREA FACIL</h2>
+  <small>Administrador de Tareas ADSO</small>
+</header>
+
+<div class="contenido">
+  <aside id="sidebar"></aside>
+  <main>
+    <h3 id="titulo">Selecciona un usuario</h3>
+    <button class="btn-add" id="btn-add" style="display:none" onclick="abrirFormulario()">+ Agregar Tarea</button>
+
+    <div id="formulario" style="display:none; margin-bottom:16px; border:1px solid #ccc; padding:12px; border-radius:6px;">
+      <input type="text" id="inp-titulo" placeholder="Título" style="width:100%; margin-bottom:6px; padding:6px;"/><br/>
+      <input type="date" id="inp-fecha" style="width:100%; margin-bottom:6px; padding:6px;"/><br/>
+      <textarea id="inp-desc" placeholder="Descripción" style="width:100%; padding:6px;" rows="3"></textarea><br/>
+      <button onclick="guardar()" style="background:purple;color:white;border:none;padding:6px 14px;border-radius:4px;margin-top:6px;">Guardar</button>
+      <button onclick="cerrarFormulario()" style="margin-left:8px;">Cancelar</button>
+    </div>
+
+    <div id="tareas"></div>
+  </main>
+</div>
+
+<script>
+  const usuarios = ["Antonia Céspedes","Emilia Torres","Marcos Jeremías","David Mercado","Pamela Chan","Adrián Serbia"];
+  const tareas = {
+    "Antonia Céspedes": [{ titulo:"Dominar Angular", fecha:"2026-04-14", desc:"Aprender las características básicas y avanzadas de Angular.", hecha:true }],
+    "Emilia Torres":[], "Marcos Jeremías":[], "David Mercado":[], "Pamela Chan":[], "Adrián Serbia":[]
+  };
+
+  let usuarioActivo = null;
+
+  document.getElementById('sidebar').innerHTML = usuarios.map(u =>
+    `<div class="usuario" onclick="seleccionar('${u}')">${u}</div>`
+  ).join('');
+
+  function seleccionar(nombre) {
+    usuarioActivo = nombre;
+    document.querySelectorAll('.usuario').forEach(el => el.classList.toggle('activo', el.textContent === nombre));
+    document.getElementById('titulo').textContent = 'Tareas de ' + nombre;
+    document.getElementById('btn-add').style.display = 'inline-block';
+    cerrarFormulario();
+    renderTareas();
+  }
+
+  function renderTareas() {
+    const lista = tareas[usuarioActivo] || [];
+    document.getElementById('tareas').innerHTML = lista.length
+      ? lista.map((t, i) => `
+          <div class="tarea">
+            <h3>${t.titulo}</h3>
+            <small>${t.fecha}</small>
+            <p>${t.desc}</p>
+            <button onclick="toggle(${i})">${t.hecha ? '✅ Terminada' : '⏳ Pendiente'}</button>
+          </div>`).join('')
+      : '<p>No hay tareas aún.</p>';
+  }
+
+  function toggle(i) {
+    tareas[usuarioActivo][i].hecha = !tareas[usuarioActivo][i].hecha;
+    renderTareas();
+  }
+
+  function abrirFormulario() {
+    document.getElementById('formulario').style.display = 'block';
+    document.getElementById('inp-fecha').value = new Date().toISOString().split('T')[0];
+  }
+
+  function cerrarFormulario() {
+    document.getElementById('formulario').style.display = 'none';
+    document.getElementById('inp-titulo').value = '';
+    document.getElementById('inp-desc').value = '';
+  }
+
+  function guardar() {
+    const titulo = document.getElementById('inp-titulo').value.trim();
+    const fecha  = document.getElementById('inp-fecha').value;
+    const desc   = document.getElementById('inp-desc').value.trim();
+    if (!titulo) return alert('Escribe un título');
+    tareas[usuarioActivo].push({ titulo, fecha, desc, hecha: false });
+    cerrarFormulario();
+    renderTareas();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<div class="app-container">
+  <header class="main-header">
+    <div class="logo-circle">
+      <img src="https://cdn-icons-png.flaticon.com/512/906/906334.png" alt="logo">
+    </div>
+    <h1>TAREA FACIL</h1>
+    <p>Administrador de Tareas ADSO</p>
+  </header>
+
+  <div class="content-wrapper">
+    <aside class="sidebar">
+      <div *ngFor="let u of usuarios"
+           (click)="seleccionar(u)"
+           class="user-item"
+           [class.active]="usuarioSeleccionado.id === u.id">
+        <img [src]="u.foto" class="avatar">
+        <span>{{ u.nombre }}</span>
+      </div>
+    </aside>
+
+    <main class="task-section">
+      <div class="task-header">
+        <h2>Tareas de {{ usuarioSeleccionado.nombre }}</h2>
+        <button class="btn-add" (click)="abrirModal()">Agregar Tarea Nueva</button>
+      </div>
+
+      <div *ngIf="mensajeError" class="form-error">
+        {{ mensajeError }}
+      </div>
+
+      <div *ngIf="mensajeExito" class="form-success">
+        {{ mensajeExito }}
+      </div>
+
+      <div *ngIf="cargando" class="status-message">
+        Cargando tareas...
+      </div>
+
+      <div *ngIf="!cargando && usuarioSeleccionado.tareas.length === 0" class="no-tasks">
+        <p>No hay tareas para este usuario.</p>
+      </div>
+
+      <div *ngFor="let tarea of usuarioSeleccionado.tareas" class="task-card">
+        <h3>{{ tarea.titulo }}</h3>
+        <p class="task-date">{{ tarea.fecha | date:"EEEE, d 'de' MMMM 'de' y, h:mm a" | lowercase }}</p>
+        <p class="task-desc">{{ tarea.desc }}</p>
+
+        <div class="btn-footer">
+          <button class="btn-edit" (click)="prepararEditar(tarea)">Editar</button>
+          <button class="btn-edit" (click)="completar(tarea.id)" style="margin-left: 10px;">Completado</button>
+          <button class="btn-done" (click)="eliminar(tarea.id)" style="margin-left: 10px;">Eliminar</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal para agregar tarea -->
+<div class="modal-overlay" *ngIf="mostrarModal" (click)="cerrarModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <h2>{{ editando ? 'Editar Tarea' : 'Agregar Nueva Tarea' }}</h2>
+    <form (ngSubmit)="agregarTarea()">
+      <div class="form-group">
+        <label for="titulo">Título</label>
+        <input type="text" id="titulo" name="titulo" [(ngModel)]="nuevaTarea.titulo" required>
+      </div>
+      <div class="form-group">
+        <label for="desc">Resumen</label>
+        <textarea id="desc" name="desc" rows="3" [(ngModel)]="nuevaTarea.desc" required></textarea>
+      </div>
+      <div class="form-group">
+        <label for="fecha">Fecha</label>
+        <input type="date" id="fecha" name="fecha" [(ngModel)]="nuevaTarea.fecha" required>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="cerrarModal()">Cancelar</button>
+        <button type="submit" class="btn-create" [disabled]="guardando">
+          {{ guardando ? 'Guardando...' : (editando ? 'Guardar Cambios' : 'Crear') }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

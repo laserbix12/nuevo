@@ -1,0 +1,22 @@
+<header>
+  <h2>TAREA FACIL</h2>
+  <small>Administrador de Tareas ADSO</small>
+</header>
+
+<div class="contenido">
+  <aside id="sidebar"></aside>
+  <main>
+    <h3 id="titulo">Selecciona un usuario</h3>
+    <button class="btn-add" id="btn-add" style="display:none" onclick="abrirFormulario()">+ Agregar Tarea</button>
+
+    <div id="formulario" style="display:none; margin-bottom:16px; border:1px solid #ccc; padding:12px; border-radius:6px;">
+      <input type="text" id="inp-titulo" placeholder="Título" style="width:100%; margin-bottom:6px; padding:6px;"/><br/>
+      <input type="date" id="inp-fecha" style="width:100%; margin-bottom:6px; padding:6px;"/><br/>
+      <textarea id="inp-desc" placeholder="Descripción" style="width:100%; padding:6px;" rows="3"></textarea><br/>
+      <button onclick="guardar()" style="background:purple;color:white;border:none;padding:6px 14px;border-radius:4px;margin-top:6px;">Guardar</button>
+      <button onclick="cerrarFormulario()" style="margin-left:8px;">Cancelar</button>
+    </div>
+
+    <div id="tareas"></div>
+  </main>
+</div>

@@ -1,0 +1,51 @@
+:host {
+  --deep-dark: #0f0a1e;      /* Fondo exterior */
+  --header-bg: #2d1b5a;      /* Color del banner superior */
+  --sidebar-item: #3d2c63;   /* Usuarios no seleccionados */
+  --active-purple: #8e68ce;  /* Color del usuario seleccionado (tu recuadro rojo) */
+  --task-card-bg: #c4b5e2;   /* Fondo lila de la tarea */
+  --btn-dark: #1e0d42;       /* Botón terminada */
+
+  /* Configuración del contenedor principal del componente */
+  display: block;
+  min-height: 100vh;
+  background-color: var(--deep-dark);
+  font-family: 'Segoe UI', Arial, sans-serif;
+  color: white;
+}
+
+.main-header {
+  background-color: var(--header-bg);
+  text-align: center;
+  padding: 30px;
+  border-radius: 0 0 20px 20px;
+  margin-bottom: 30px;
+}
+
+.logo-circle img { width: 50px; }
+
+.content-wrapper {
+  display: flex;
+  padding: 0 40px;
+  gap: 30px;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-item {
+  background-color: var(--sidebar-item);
+  padding: 12px 15px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  cursor: pointer;
+  transition: 0.2s;
+  color: rgba(255,255,255,0.8);
+}
