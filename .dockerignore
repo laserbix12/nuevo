@@ -1,0 +1,11 @@
+.git
+.gitignore
+**/node_modules
+**/dist
+**/.angular
+**/coverage
+**/.qodo
+**/.kombai
+**/.vscode
+npm-debug.log
+yarn-error.log
