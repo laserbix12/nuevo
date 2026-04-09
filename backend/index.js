@@ -29,6 +29,7 @@ const pool = mysql.createPool({
 
 const allowedOrigins = [
   'http://localhost:4200',
+  'https://nuevo-zeta-navy.vercel.app',
   ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : []),
 ]
   .map((origin) => origin.trim())
@@ -54,8 +55,81 @@ app.use((req, _res, next) => {
   next();
 });
 
-// --- EL RESTO DE TUS FUNCIONES (inicializarBaseDeDatos, firmarToken, etc.) SE MANTIENEN IGUAL ---
-// ... (Aquí va todo tu código de rutas y lógica que ya tienes)
+// --- RUTAS DE AUTENTICACIÓN ---
+function firmarToken(adminId, username) {
+  return jwt.sign({ adminId, username }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+function verificarToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.admin = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Token inválido' });
+  }
+}
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+    }
+
+    const [admins] = await pool.query('SELECT * FROM administradores WHERE username = ?', [username]);
+    if (admins.length === 0) {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
+
+    const admin = admins[0];
+    const passwordValida = await bcrypt.compare(password, admin.password_hash);
+    if (!passwordValida) {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
+
+    const token = firmarToken(admin.id, admin.username);
+    res.json({
+      token,
+      admin: {
+        id: admin.id,
+        username: admin.username,
+        nombre: admin.nombre,
+      },
+    });
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', verificarToken, async (req, res) => {
+  try {
+    const [admins] = await pool.query('SELECT id, username, nombre FROM administradores WHERE id = ?', [
+      req.admin.adminId,
+    ]);
+    if (admins.length === 0) {
+      return res.status(404).json({ error: 'Admin no encontrado' });
+    }
+    res.json({ admin: admins[0] });
+  } catch (error) {
+    console.error('Error en obtener perfil:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+// --- ENDPOINT DE SALUD (HEALTH CHECK) ---
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, message: 'Backend funcionando correctamente' });
+});
+
+// --- EL RESTO DE TUS FUNCIONES (inicializarBaseDeDatos, etc.) SE MANTIENEN IGUAL ---
 
 async function inicializarBaseDeDatos() {
   await pool.query(`
