@@ -12,15 +12,19 @@ import { AuthService } from './servicios/auth.service';
   template: `
     <div class="app-container">
       <header class="main-header">
-        <button class="logo-button" type="button" (click)="volverAlInicio()">
+        <div class="logo-section" (click)="volverAlInicio()" style="cursor: pointer;">
           <div class="logo-circle">
-            <img src="https://cdn-icons-png.flaticon.com/512/906/906334.png" alt="logo" />
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+              <!-- Símbolo simple de tareas: checkmark -->
+              <rect x="50" y="60" width="100" height="30" rx="5" fill="none" stroke="#1e3a8a" stroke-width="3"/>
+              <polyline points="65,75 75,85 95,70" stroke="#1e3a8a" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
           </div>
-          <div class="logo-copy">
+          <div class="header-text">
             <h1>TAREA FACIL</h1>
             <p>Administrador de Tareas ADSO</p>
           </div>
-        </button>
+        </div>
       </header>
 
       @if (mensajeGlobal()) {

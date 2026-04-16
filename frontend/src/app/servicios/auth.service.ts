@@ -37,6 +37,15 @@ export class AuthService {
     this.restaurarSesion();
   }
 
+  private getAuthHeaders() {
+    const token = this.getToken();
+    return {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    };
+  }
+
   login(username: string, password: string): Observable<LoginResponse> {
     return this.http
       .post<LoginResponse>(`${API_BASE_URL}/auth/login`, { username, password })
@@ -44,7 +53,7 @@ export class AuthService {
   }
 
   obtenerPerfil(): Observable<{ admin: AdminSession }> {
-    return this.http.get<{ admin: AdminSession }>(`${API_BASE_URL}/auth/me`).pipe(
+    return this.http.get<{ admin: AdminSession }>(`${API_BASE_URL}/auth/me`, this.getAuthHeaders()).pipe(
       tap((response) => {
         this.sessionState.set(response.admin);
       }),
@@ -53,12 +62,12 @@ export class AuthService {
 
   actualizarPerfil(payload: { nombre: string; passwordActual: string; passwordNueva?: string }) {
     return this.http
-      .put<{ admin: AdminSession }>(`${API_BASE_URL}/auth/profile`, payload)
+      .put<{ admin: AdminSession }>(`${API_BASE_URL}/auth/profile`, payload, this.getAuthHeaders())
       .pipe(tap((response) => this.sessionState.set(response.admin)));
   }
 
   crearAdministrador(payload: AdminPayload) {
-    return this.http.post(`${API_BASE_URL}/auth/admins`, payload);
+    return this.http.post(`${API_BASE_URL}/auth/admins`, payload, this.getAuthHeaders());
   }
 
   logout() {

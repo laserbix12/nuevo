@@ -211,16 +211,21 @@ export class UsuarioDetalle implements OnInit {
       : this.tareasService.crearTarea(this.usuario.id, payload);
 
     operacion.subscribe({
-      next: () => {
+      next: (response) => {
+        console.log('✅ Tarea guardada exitosamente:', response);
         this.cerrarModal();
         this.tipoMensaje.set('ok');
         this.mensajeEstado.set(estabaEditando ? 'Tarea actualizada.' : 'Tarea creada.');
         this.cargarTareas(this.usuario!.id);
       },
       error: (error) => {
+        console.error('❌ Error al guardar tarea:', error);
+        console.error('   Status:', error.status);
+        console.error('   Message:', error.message);
+        console.error('   Body:', error.error);
         this.guardando.set(false);
         this.tipoMensaje.set('error');
-        this.mensajeEstado.set(error.error?.mensaje ?? 'No se pudo guardar la tarea.');
+        this.mensajeEstado.set(error.error?.error ?? error.error?.message ?? 'No se pudo guardar la tarea.');
       },
     });
   }
@@ -268,16 +273,19 @@ export class UsuarioDetalle implements OnInit {
     }
 
     this.cargando.set(true);
+    console.log('📥 Cargando tareas para usuario:', usuarioId);
     this.tareasService.getTareasPorUsuario(usuarioId).subscribe({
       next: (tareas) => {
+        console.log('✅ Tareas cargadas:', tareas);
         this.tareas.set(tareas);
         this.cargando.set(false);
       },
       error: (error) => {
+        console.error('❌ Error cargando tareas:', error);
         this.tareas.set([]);
         this.cargando.set(false);
         this.tipoMensaje.set('error');
-        this.mensajeEstado.set(error.error?.mensaje ?? 'No se pudieron cargar las tareas.');
+        this.mensajeEstado.set(error.error?.error ?? 'No se pudieron cargar las tareas.');
       },
     });
   }

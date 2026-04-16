@@ -4,6 +4,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
+import { AuthService } from './auth.service';
 
 import { TareasService } from './tareas.service';
 
@@ -13,7 +14,11 @@ describe('TareasService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: { getToken: () => 'fake-token' } }
+      ],
     });
 
     service = TestBed.inject(TareasService);
@@ -35,7 +40,7 @@ describe('TareasService', () => {
       tareasResultado = tareas;
     });
 
-    const req = httpMock.expectOne('http://localhost:3000/api/tareas/usuario/2');
+    const req = httpMock.expectOne('http://localhost:3000/api/tareas'); // La URL real es /api/tareas
     expect(req.request.method).toBe('GET');
     req.flush([
       {
@@ -44,6 +49,13 @@ describe('TareasService', () => {
         resumen: 'Revisar pendientes finales',
         expira: '2026-04-14',
         idUsuario: '2',
+        completada: 0,
+      },
+      { // Añadir otra tarea para un usuario diferente para probar el filtro
+        id: 'def456',
+        titulo: 'Otra tarea',
+        resumen: 'Para otro usuario',
+        expira: '2026-04-15',
         completada: 0,
       },
     ]);
