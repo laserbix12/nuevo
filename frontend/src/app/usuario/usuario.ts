@@ -1,6 +1,6 @@
 import { Component, OnInit, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../servicios/auth.service';
 import { GuardarTareaPayload, TareasService } from '../servicios/tareas.service';
@@ -18,7 +18,7 @@ import { Tarea, Usuario, UsuarioService } from '../usuario.service';
             <h2>Tareas de {{ usuario.nombre }}</h2>
             <p class="reading-mode">
               {{ sesionActiva()
-                ? 'Modo administrador activo: puedes agregar, editar, completar y eliminar tareas.'
+                ? 'Modo administrador activo: puedes agregar, editar, terminar y eliminar tareas.'
                 : 'Modo lectura: solo puedes consultar tareas.' }}
             </p>
           </div>
@@ -65,16 +65,16 @@ import { Tarea, Usuario, UsuarioService } from '../usuario.service';
 
                 @if (sesionActiva()) {
                   <div class="btn-footer">
-                    <button type="button" class="btn-edit" (click)="abrirModalEditar(tarea)">Editar</button>
+                    <button type="button" class="btn-action" (click)="abrirModalEditar(tarea)">Editar</button>
                     <button
                       type="button"
-                      class="btn-edit"
+                      class="btn-action btn-action--success"
                       (click)="completar(tarea.id)"
                       [disabled]="tarea.completada"
                     >
-                      Completar
+                      Terminar
                     </button>
-                    <button type="button" class="btn-done" (click)="eliminar(tarea.id)">Eliminar</button>
+                    <button type="button" class="btn-action btn-action--danger" (click)="eliminar(tarea.id)">Eliminar</button>
                   </div>
                 }
               </article>
@@ -123,6 +123,7 @@ import { Tarea, Usuario, UsuarioService } from '../usuario.service';
 })
 export class UsuarioDetalle implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly usuarioService = inject(UsuarioService);
   private readonly tareasService = inject(TareasService);
   private readonly authService = inject(AuthService);
@@ -146,17 +147,60 @@ export class UsuarioDetalle implements OnInit {
   ngOnInit() {
     this.route.paramMap.subscribe((params) => {
       const id = Number(params.get('id'));
-      this.usuario = this.usuarioService.getUsuario(id);
       this.cerrarModal();
       this.limpiarMensaje();
+      this.usuario = undefined;
 
-      if (!this.usuario) {
+      if (!id) {
         this.tareas.set([]);
         this.cargando.set(false);
         return;
       }
 
-      this.cargarTareas(this.usuario.id);
+      this.cargarUsuario(id);
+    });
+  }
+
+  private cargarUsuario(id: number) {
+    this.cargando.set(true);
+    this.usuarioService.getUsuario(id).subscribe({
+      next: (usuario) => {
+        this.usuario = usuario;
+        this.cargarTareas(usuario.id);
+      },
+      error: (error) => {
+        console.error('Error cargando usuario:', error);
+        this.usuario = undefined;
+        this.tareas.set([]);
+        this.cargando.set(false);
+        if (error.status === 404) {
+          this.recuperarDesdeUsuarioNoEncontrado();
+          return;
+        }
+
+        this.tipoMensaje.set('error');
+        this.mensajeEstado.set(error.error?.mensaje ?? error.error?.error ?? 'No se pudo cargar el usuario.');
+      },
+    });
+  }
+
+  private recuperarDesdeUsuarioNoEncontrado() {
+    this.usuarioService.getUsuarios().subscribe({
+      next: (usuarios) => {
+        if (usuarios.length > 0) {
+          this.router.navigate(['/usuario', usuarios[0].id]);
+          return;
+        }
+
+        this.tipoMensaje.set('error');
+        this.mensajeEstado.set('No hay usuarios disponibles. Crea uno para poder registrar tareas.');
+      },
+      error: (error) => {
+        this.tipoMensaje.set('error');
+        this.mensajeEstado.set(
+          error.error?.mensaje ?? 'El usuario solicitado no existe y no se pudo cargar la lista de usuarios.',
+        );
+      },
     });
   }
 
@@ -225,7 +269,9 @@ export class UsuarioDetalle implements OnInit {
         console.error('   Body:', error.error);
         this.guardando.set(false);
         this.tipoMensaje.set('error');
-        this.mensajeEstado.set(error.error?.error ?? error.error?.message ?? 'No se pudo guardar la tarea.');
+        this.mensajeEstado.set(
+          error.error?.mensaje ?? error.error?.error ?? error.error?.message ?? 'No se pudo guardar la tarea.',
+        );
       },
     });
   }
@@ -285,7 +331,7 @@ export class UsuarioDetalle implements OnInit {
         this.tareas.set([]);
         this.cargando.set(false);
         this.tipoMensaje.set('error');
-        this.mensajeEstado.set(error.error?.error ?? 'No se pudieron cargar las tareas.');
+        this.mensajeEstado.set(error.error?.mensaje ?? error.error?.error ?? 'No se pudieron cargar las tareas.');
       },
     });
   }

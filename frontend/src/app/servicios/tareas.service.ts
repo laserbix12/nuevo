@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { API_BASE_URL } from '../api.config';
 import { Tarea } from '../usuario.service';
 import { AuthService } from './auth.service';
@@ -55,10 +56,17 @@ export class TareasService {
   }
 
   getTareasPorUsuario(usuarioId: number): Observable<Tarea[]> {
-    const options = {
-      ...this.getAuthHeaders(),
-      params: { idUsuario: usuarioId.toString() },
+    const token = this.authService.getToken();
+    const options: {
+      headers?: HttpHeaders;
+      params: HttpParams;
+    } = {
+      params: new HttpParams().set('idUsuario', usuarioId.toString()),
     };
+
+    if (token) {
+      options.headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+    }
 
     return this.http
       .get<TareaApi[]>(this.apiUrl, options)
