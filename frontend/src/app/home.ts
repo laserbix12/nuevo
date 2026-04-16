@@ -118,7 +118,6 @@ import { AuthService } from './servicios/auth.service';
             <section class="embedded-card">
               <h3>Crear administrador</h3>
               <form class="stack-form" (ngSubmit)="crearAdmin()">
-                <input type="text" name="nombre" [(ngModel)]="adminForm.nombre" placeholder="Nombre" required />
                 <input type="text" name="username" [(ngModel)]="adminForm.username" placeholder="Usuario" required />
                 <input type="password" name="password" [(ngModel)]="adminForm.password" placeholder="Contrasena" required />
                 <div class="modal-footer compact">
@@ -243,7 +242,7 @@ export class Home {
 
   loginForm = { username: '', password: '' };
   perfilForm = { username: '', password: '' };
-  adminForm = { nombre: '', username: '', password: '' };
+  adminForm = { username: '', password: '' };
 
   constructor() {
     if (isPlatformBrowser(this.platformId)) {
@@ -433,7 +432,6 @@ export class Home {
   crearAdmin() {
     this.authService
       .crearAdministrador({
-        nombre: this.adminForm.nombre.trim(),
         username: this.adminForm.username.trim(),
         password: this.adminForm.password,
       })
@@ -441,7 +439,7 @@ export class Home {
         next: () => {
           this.tipoMensaje.set('ok');
           this.mensajeGlobal.set('Administrador creado correctamente.');
-          this.adminForm = { nombre: '', username: '', password: '' };
+          this.adminForm = { username: '', password: '' };
           this.mostrarNuevoAdmin.set(false);
         },
         error: (error) => {
@@ -455,7 +453,7 @@ export class Home {
     this.authService.logout();
     this.loginForm = { username: '', password: '' };
     this.perfilForm = { username: '', password: '' };
-    this.adminForm = { nombre: '', username: '', password: '' };
+    this.adminForm = { username: '', password: '' };
     this.cerrarPaneles();
     this.tipoMensaje.set('ok');
     this.mensajeGlobal.set('Sesion cerrada.');

@@ -18,7 +18,7 @@ interface LoginResponse {
 interface AdminPayload {
   username: string;
   password: string;
-  nombre: string;
+  nombre?: string;
 }
 
 @Injectable({

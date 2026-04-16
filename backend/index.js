@@ -182,19 +182,20 @@ app.put('/api/auth/profile', verificarToken, async (req, res) => {
 app.post('/api/auth/admins', verificarToken, async (req, res) => {
   try {
     const { username, nombre, password } = req.body;
-    if (!username || !nombre || !password) {
-      return res.status(400).json({ mensaje: 'Todos los campos son requeridos' });
+    if (!username || !password) {
+      return res.status(400).json({ mensaje: 'Usuario y contraseÃ±a son requeridos' });
     }
 
+    const nombreNormalizado = nombre?.trim() || username.trim();
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const [result] = await pool.query(
       'INSERT INTO administradores (username, nombre, password_hash) VALUES (?, ?, ?)',
-      [username, nombre, passwordHash],
+      [username.trim(), nombreNormalizado, passwordHash],
     );
 
     res.status(201).json({
       mensaje: 'Administrador creado exitosamente',
-      admin: { id: result.insertId, username, nombre },
+      admin: { id: result.insertId, username: username.trim(), nombre: nombreNormalizado },
     });
   } catch (error) {
     console.error('Error al crear administrador:', error);
