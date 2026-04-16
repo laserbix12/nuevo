@@ -60,7 +60,7 @@ export class AuthService {
     );
   }
 
-  actualizarPerfil(payload: { nombre: string; passwordActual: string; passwordNueva?: string }) {
+  actualizarPerfil(payload: { username: string; password?: string }) {
     return this.http
       .put<{ admin: AdminSession }>(`${API_BASE_URL}/auth/profile`, payload, this.getAuthHeaders())
       .pipe(tap((response) => this.sessionState.set(response.admin)));

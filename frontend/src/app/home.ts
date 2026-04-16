@@ -99,19 +99,12 @@ import { AuthService } from './servicios/auth.service';
             <section class="embedded-card">
               <h3>Editar perfil</h3>
               <form class="stack-form" (ngSubmit)="guardarPerfil()">
-                <input type="text" name="nombre" [(ngModel)]="perfilForm.nombre" placeholder="Nombre" required />
+                <input type="text" name="username" [(ngModel)]="perfilForm.username" placeholder="Usuario" required />
                 <input
                   type="password"
-                  name="passwordActual"
-                  [(ngModel)]="perfilForm.passwordActual"
-                  placeholder="Contrasena actual"
-                  required
-                />
-                <input
-                  type="password"
-                  name="passwordNueva"
-                  [(ngModel)]="perfilForm.passwordNueva"
-                  placeholder="Nueva contrasena (opcional)"
+                  name="password"
+                  [(ngModel)]="perfilForm.password"
+                  placeholder="Contrasena"
                 />
                 <div class="modal-footer compact">
                   <button type="button" class="btn-cancel" (click)="cerrarPaneles()">Cancelar</button>
@@ -249,7 +242,7 @@ export class Home {
   readonly procesandoSesion = signal(false);
 
   loginForm = { username: '', password: '' };
-  perfilForm = { nombre: '', passwordActual: '', passwordNueva: '' };
+  perfilForm = { username: '', password: '' };
   adminForm = { nombre: '', username: '', password: '' };
 
   constructor() {
@@ -271,9 +264,8 @@ export class Home {
       }
 
       this.perfilForm = {
-        nombre: admin.nombre,
-        passwordActual: '',
-        passwordNueva: '',
+        username: admin.username,
+        password: '',
       };
     });
   }
@@ -406,7 +398,7 @@ export class Home {
       next: ({ admin }) => {
         this.procesandoSesion.set(false);
         this.loginForm = { username: '', password: '' };
-        this.perfilForm = { nombre: admin.nombre, passwordActual: '', passwordNueva: '' };
+        this.perfilForm = { username: admin.username, password: '' };
         this.tipoMensaje.set('ok');
         this.mensajeGlobal.set(`Sesion iniciada como ${admin.username}.`);
       },
@@ -421,15 +413,14 @@ export class Home {
   guardarPerfil() {
     this.authService
       .actualizarPerfil({
-        nombre: this.perfilForm.nombre.trim(),
-        passwordActual: this.perfilForm.passwordActual,
-        passwordNueva: this.perfilForm.passwordNueva.trim() || undefined,
+        username: this.perfilForm.username.trim(),
+        password: this.perfilForm.password.trim() || undefined,
       })
       .subscribe({
         next: ({ admin }) => {
           this.tipoMensaje.set('ok');
           this.mensajeGlobal.set('Perfil actualizado correctamente.');
-          this.perfilForm = { nombre: admin.nombre, passwordActual: '', passwordNueva: '' };
+          this.perfilForm = { username: admin.username, password: '' };
           this.mostrarPerfil.set(false);
         },
         error: (error) => {
@@ -463,7 +454,7 @@ export class Home {
   cerrarSesion() {
     this.authService.logout();
     this.loginForm = { username: '', password: '' };
-    this.perfilForm = { nombre: '', passwordActual: '', passwordNueva: '' };
+    this.perfilForm = { username: '', password: '' };
     this.adminForm = { nombre: '', username: '', password: '' };
     this.cerrarPaneles();
     this.tipoMensaje.set('ok');

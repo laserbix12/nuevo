@@ -132,8 +132,8 @@ app.get('/api/auth/me', verificarToken, async (req, res) => {
 
 app.put('/api/auth/profile', verificarToken, async (req, res) => {
   try {
-    const { nombre, passwordActual, passwordNueva } = req.body;
-    if (!nombre || !passwordActual) {
+    const { username, password } = req.body;
+    if (!username || !username.trim()) {
       return res.status(400).json({ mensaje: 'Nombre y contraseña actual son requeridos' });
     }
 
@@ -143,16 +143,24 @@ app.put('/api/auth/profile', verificarToken, async (req, res) => {
     }
 
     const admin = admins[0];
-    const passwordValida = await bcrypt.compare(passwordActual, admin.password_hash);
-    if (!passwordValida) {
+    const usernameNormalizado = username.trim();
+
+    const [duplicados] = await pool.query(
+      'SELECT id FROM administradores WHERE username = ? AND id <> ?',
+      [usernameNormalizado, req.admin.adminId],
+    );
+    if (duplicados.length > 0) {
+      return res.status(400).json({ mensaje: 'El nombre de usuario ya estÃ¡ en uso' });
+    }
+    if (false) {
       return res.status(401).json({ mensaje: 'Contraseña actual incorrecta' });
     }
 
-    let query = 'UPDATE administradores SET nombre = ?';
-    const values = [nombre];
+    let query = 'UPDATE administradores SET username = ?';
+    const values = [usernameNormalizado];
 
-    if (passwordNueva) {
-      const hash = await bcrypt.hash(passwordNueva, SALT_ROUNDS);
+    if (password && password.trim()) {
+      const hash = await bcrypt.hash(password.trim(), SALT_ROUNDS);
       query += ', password_hash = ?';
       values.push(hash);
     }
@@ -163,7 +171,7 @@ app.put('/api/auth/profile', verificarToken, async (req, res) => {
     await pool.query(query, values);
     res.json({
       mensaje: 'Perfil actualizado exitosamente',
-      admin: { id: admin.id, username: admin.username, nombre },
+      admin: { id: admin.id, username: usernameNormalizado, nombre: admin.nombre },
     });
   } catch (error) {
     console.error('Error al actualizar perfil:', error);
