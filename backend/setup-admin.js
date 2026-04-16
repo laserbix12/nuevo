@@ -1,8 +1,9 @@
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
+const path = require('path');
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 const SALT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
 

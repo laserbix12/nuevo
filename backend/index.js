@@ -1,27 +1,27 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
-// CAMBIO 1: Usamos bcryptjs para evitar errores de compilación en Linux/Railway
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const fs = require('fs');
+const path = require('path');
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 const app = express();
-// CAMBIO 2: Railway asigna el puerto dinámicamente, aseguramos 0.0.0.0
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || 'cambia-esta-clave-en-produccion';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const SALT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
+const DATABASE = process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
 
 const pool = mysql.createPool({
-  // CAMBIO 3: Priorizamos MYSQLHOST que es la que Railway inyecta automáticamente
   host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
   port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
   user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
   password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
-  database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas', 
+  database: DATABASE,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -48,14 +48,13 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use('/api/avatars', express.static(path.join(__dirname, 'public', 'avatars')));
 
-// Middlewares y rutas se mantienen igual...
 app.use((req, _res, next) => {
   console.log(`${req.method} ${req.url}`);
   next();
 });
 
-// --- RUTAS DE AUTENTICACIÓN ---
 function firmarToken(adminId, username) {
   return jwt.sign({ adminId, username }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
@@ -63,34 +62,42 @@ function firmarToken(adminId, username) {
 function verificarToken(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
-    return res.status(401).json({ error: 'No autorizado' });
+    return res.status(401).json({ mensaje: 'No autorizado' });
   }
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.admin = decoded;
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Token inválido' });
+    return res.status(401).json({ mensaje: 'Token inválido' });
   }
 }
 
-// POST /api/auth/login
+function urlAvatar(req, avatarFileName) {
+  return `${req.protocol}://${req.get('host')}/api/avatars/${avatarFileName}`;
+}
+
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, message: 'Backend funcionando correctamente' });
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
-      return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+      return res.status(400).json({ mensaje: 'Usuario y contraseña requeridos' });
     }
 
     const [admins] = await pool.query('SELECT * FROM administradores WHERE username = ?', [username]);
     if (admins.length === 0) {
-      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+      return res.status(401).json({ mensaje: 'Usuario o contraseña incorrectos' });
     }
 
     const admin = admins[0];
     const passwordValida = await bcrypt.compare(password, admin.password_hash);
     if (!passwordValida) {
-      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+      return res.status(401).json({ mensaje: 'Usuario o contraseña incorrectos' });
     }
 
     const token = firmarToken(admin.id, admin.username);
@@ -104,31 +111,28 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    res.status(500).json({ mensaje: 'Error en el servidor' });
   }
 });
 
-// GET /api/auth/me
 app.get('/api/auth/me', verificarToken, async (req, res) => {
   try {
     const [admins] = await pool.query('SELECT id, username, nombre FROM administradores WHERE id = ?', [
       req.admin.adminId,
     ]);
     if (admins.length === 0) {
-      return res.status(404).json({ error: 'Admin no encontrado' });
+      return res.status(404).json({ mensaje: 'Admin no encontrado' });
     }
     res.json({ admin: admins[0] });
   } catch (error) {
     console.error('Error en obtener perfil:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    res.status(500).json({ mensaje: 'Error en el servidor' });
   }
 });
 
-// PUT /api/auth/profile - Actualizar perfil del administrador
 app.put('/api/auth/profile', verificarToken, async (req, res) => {
   try {
     const { nombre, passwordActual, passwordNueva } = req.body;
-    
     if (!nombre || !passwordActual) {
       return res.status(400).json({ mensaje: 'Nombre y contraseña actual son requeridos' });
     }
@@ -157,10 +161,9 @@ app.put('/api/auth/profile', verificarToken, async (req, res) => {
     values.push(req.admin.adminId);
 
     await pool.query(query, values);
-
     res.json({
       mensaje: 'Perfil actualizado exitosamente',
-      admin: { id: admin.id, username: admin.username, nombre }
+      admin: { id: admin.id, username: admin.username, nombre },
     });
   } catch (error) {
     console.error('Error al actualizar perfil:', error);
@@ -168,25 +171,22 @@ app.put('/api/auth/profile', verificarToken, async (req, res) => {
   }
 });
 
-// POST /api/auth/admins - Crear un nuevo administrador
 app.post('/api/auth/admins', verificarToken, async (req, res) => {
   try {
     const { username, nombre, password } = req.body;
-
     if (!username || !nombre || !password) {
       return res.status(400).json({ mensaje: 'Todos los campos son requeridos' });
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-
     const [result] = await pool.query(
       'INSERT INTO administradores (username, nombre, password_hash) VALUES (?, ?, ?)',
-      [username, nombre, passwordHash]
+      [username, nombre, passwordHash],
     );
 
     res.status(201).json({
       mensaje: 'Administrador creado exitosamente',
-      admin: { id: result.insertId, username, nombre }
+      admin: { id: result.insertId, username, nombre },
     });
   } catch (error) {
     console.error('Error al crear administrador:', error);
@@ -197,151 +197,291 @@ app.post('/api/auth/admins', verificarToken, async (req, res) => {
   }
 });
 
-// --- ENDPOINT DE SALUD (HEALTH CHECK) ---
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, message: 'Backend funcionando correctamente' });
-});
-
-// --- RUTAS DE TAREAS ---
-
-// GET /api/tareas - Obtener todas las tareas del admin autenticado
-app.get('/api/tareas', verificarToken, async (req, res) => {
+app.get('/api/usuarios', async (req, res) => {
   try {
-    const { idUsuario } = req.query;
-
-    let query = 'SELECT id, titulo, resumen, expira, idUsuario, completada FROM tareas WHERE idAdmin = ?';
-    const values = [req.admin.adminId];
-
-    if (idUsuario) {
-      query += ' AND idUsuario = ?';
-      values.push(idUsuario);
-    }
-
-    query += ' ORDER BY expira ASC';
-
-    const [tareas] = await pool.query(query, values);
-    res.json(tareas);
+    const [usuarios] = await pool.query('SELECT id, nombre, avatar FROM usuarios ORDER BY nombre ASC');
+    const lista = usuarios.map((usuario) => ({
+      id: usuario.id,
+      nombre: usuario.nombre,
+      avatar: usuario.avatar,
+      foto: urlAvatar(req, usuario.avatar),
+    }));
+    res.json(lista);
   } catch (error) {
-    console.error('Error al obtener tareas:', error);
-    res.status(500).json({ error: 'Error al obtener tareas' });
+    console.error('Error al obtener usuarios:', error);
+    res.status(500).json({ mensaje: 'Error al obtener usuarios' });
   }
 });
 
-// POST /api/tareas - Crear nueva tarea
+app.get('/api/usuarios/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (id === 'avatars') {
+      const archivos = await fs.promises.readdir(path.join(__dirname, 'public', 'avatars'));
+      const lista = archivos
+        .filter((file) => ['.svg', '.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(file).toLowerCase()))
+        .map((avatar) => ({ id: avatar, url: urlAvatar(req, avatar) }));
+      return res.json(lista);
+    }
+
+    const [usuarios] = await pool.query('SELECT id, nombre, avatar FROM usuarios WHERE id = ?', [id]);
+    if (usuarios.length === 0) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+
+    const usuario = usuarios[0];
+    res.json({
+      id: usuario.id,
+      nombre: usuario.nombre,
+      avatar: usuario.avatar,
+      foto: urlAvatar(req, usuario.avatar),
+    });
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({ mensaje: 'Error al obtener usuario' });
+  }
+});
+
+app.get('/api/usuarios/avatars', async (req, res) => {
+  try {
+    const archivos = await fs.promises.readdir(path.join(__dirname, 'public', 'avatars'));
+    const lista = archivos
+      .filter((file) => ['.svg', '.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(file).toLowerCase()))
+      .map((avatar) => ({ id: avatar, url: urlAvatar(req, avatar) }));
+    res.json(lista);
+  } catch (error) {
+    console.error('Error al listar avatares:', error);
+    res.status(500).json({ mensaje: 'Error al obtener catálogo de avatares' });
+  }
+});
+
+app.post('/api/usuarios', verificarToken, async (req, res) => {
+  try {
+    const { nombre, avatar } = req.body;
+    if (!nombre || !avatar) {
+      return res.status(400).json({ mensaje: 'Nombre y avatar son requeridos' });
+    }
+
+    const rutaAvatar = path.join(__dirname, 'public', 'avatars', avatar);
+    if (!fs.existsSync(rutaAvatar)) {
+      return res.status(400).json({ mensaje: 'Avatar inválido' });
+    }
+
+    const [resultado] = await pool.query(
+      'INSERT INTO usuarios (nombre, avatar) VALUES (?, ?)',
+      [nombre.trim(), avatar],
+    );
+
+    res.status(201).json({
+      id: resultado.insertId,
+      nombre: nombre.trim(),
+      avatar,
+      foto: urlAvatar(req, avatar),
+      mensaje: 'Usuario creado exitosamente',
+    });
+  } catch (error) {
+    console.error('Error al crear usuario:', error);
+    res.status(500).json({ mensaje: 'Error al crear usuario' });
+  }
+});
+
+app.put('/api/usuarios/:id', verificarToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, avatar } = req.body;
+    if (!nombre || !avatar) {
+      return res.status(400).json({ mensaje: 'Nombre y avatar son requeridos' });
+    }
+
+    const rutaAvatar = path.join(__dirname, 'public', 'avatars', avatar);
+    if (!fs.existsSync(rutaAvatar)) {
+      return res.status(400).json({ mensaje: 'Avatar inválido' });
+    }
+
+    const [resultado] = await pool.query('UPDATE usuarios SET nombre = ?, avatar = ? WHERE id = ?', [
+      nombre.trim(),
+      avatar,
+      id,
+    ]);
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+
+    res.json({
+      id: Number(id),
+      nombre: nombre.trim(),
+      avatar,
+      foto: urlAvatar(req, avatar),
+      mensaje: 'Usuario actualizado correctamente',
+    });
+  } catch (error) {
+    console.error('Error al actualizar usuario:', error);
+    res.status(500).json({ mensaje: 'Error al actualizar usuario' });
+  }
+});
+
+app.delete('/api/usuarios/:id', verificarToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [resultado] = await pool.query('DELETE FROM usuarios WHERE id = ?', [id]);
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+    res.json({ mensaje: 'Usuario y sus tareas eliminados correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar usuario:', error);
+    res.status(500).json({ mensaje: 'Error al eliminar usuario' });
+  }
+});
+
+app.get('/api/tareas', async (req, res) => {
+  try {
+    const { idUsuario } = req.query;
+    if (!idUsuario) {
+      return res.status(400).json({ mensaje: 'Se requiere idUsuario para listar tareas' });
+    }
+
+    const [tareas] = await pool.query(
+      'SELECT id, titulo, resumen, expira, idUsuario, completada FROM tareas WHERE idUsuario = ? ORDER BY expira ASC',
+      [Number(idUsuario)],
+    );
+
+    res.json(tareas);
+  } catch (error) {
+    console.error('Error al obtener tareas:', error);
+    res.status(500).json({ mensaje: 'Error al obtener tareas' });
+  }
+});
+
 app.post('/api/tareas', verificarToken, async (req, res) => {
   try {
     const { id, titulo, resumen, expira, idUsuario } = req.body;
-    
-    // Validaciones
-    if (!id || !titulo || !resumen || !expira) {
-      return res.status(400).json({ error: 'Faltan campos requeridos: id, titulo, resumen, expira' });
+    if (!id || !titulo || !resumen || !expira || !idUsuario) {
+      return res.status(400).json({ mensaje: 'Faltan campos requeridos: id, titulo, resumen, expira, idUsuario' });
     }
 
-    // Verificar que la fecha sea válida
+    const [usuarios] = await pool.query('SELECT id FROM usuarios WHERE id = ?', [idUsuario]);
+    if (usuarios.length === 0) {
+      return res.status(400).json({ mensaje: 'El usuario asociado no existe' });
+    }
+
     if (isNaN(new Date(expira).getTime())) {
-      return res.status(400).json({ error: 'Formato de fecha inválido (usa YYYY-MM-DD)' });
+      return res.status(400).json({ mensaje: 'Formato de fecha inválido (usa YYYY-MM-DD)' });
     }
 
     await pool.query(
       'INSERT INTO tareas (id, titulo, resumen, expira, idUsuario, idAdmin, completada) VALUES (?, ?, ?, ?, ?, ?, 0)',
-      [id, titulo, resumen, expira, idUsuario || 0, req.admin.adminId]
+      [id, titulo.trim(), resumen.trim(), expira, idUsuario, req.admin.adminId],
     );
 
-    res.status(201).json({ 
-      message: 'Tarea creada exitosamente',
-      tarea: { id, titulo, resumen, expira, idUsuario: idUsuario || 0, completada: 0 }
+    res.status(201).json({
+      mensaje: 'Tarea creada exitosamente',
+      tarea: { id, titulo: titulo.trim(), resumen: resumen.trim(), expira, idUsuario, completada: 0 },
     });
   } catch (error) {
     console.error('Error al crear tarea:', error);
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ error: 'Ya existe una tarea con ese ID' });
+      return res.status(400).json({ mensaje: 'Ya existe una tarea con ese ID' });
     }
-    res.status(500).json({ error: 'Error al crear tarea' });
+    res.status(500).json({ mensaje: 'Error al crear tarea' });
   }
 });
 
-// PUT /api/tareas/:id - Actualizar tarea
 app.put('/api/tareas/:id', verificarToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { titulo, resumen, expira, completada } = req.body;
+    const { titulo, resumen, expira, completada, idUsuario } = req.body;
 
-    // Verificar que la tarea pertenece al admin
-    const [tareas] = await pool.query(
-      'SELECT id FROM tareas WHERE id = ? AND idAdmin = ?',
-      [id, req.admin.adminId]
-    );
-
+    const [tareas] = await pool.query('SELECT id FROM tareas WHERE id = ? AND idAdmin = ?', [id, req.admin.adminId]);
     if (tareas.length === 0) {
-      return res.status(404).json({ error: 'Tarea no encontrada' });
+      return res.status(404).json({ mensaje: 'Tarea no encontrada' });
     }
 
-    // Preparar actualización dinámica
     const campos = [];
     const valores = [];
-    
+
     if (titulo !== undefined) {
       campos.push('titulo = ?');
-      valores.push(titulo);
+      valores.push(titulo.trim());
     }
     if (resumen !== undefined) {
       campos.push('resumen = ?');
-      valores.push(resumen);
+      valores.push(resumen.trim());
     }
     if (expira !== undefined) {
+      if (isNaN(new Date(expira).getTime())) {
+        return res.status(400).json({ mensaje: 'Formato de fecha inválido' });
+      }
       campos.push('expira = ?');
       valores.push(expira);
     }
     if (completada !== undefined) {
       campos.push('completada = ?');
-      valores.push(completada);
+      valores.push(completada ? 1 : 0);
+    }
+    if (idUsuario !== undefined) {
+      const [usuarios] = await pool.query('SELECT id FROM usuarios WHERE id = ?', [idUsuario]);
+      if (usuarios.length === 0) {
+        return res.status(400).json({ mensaje: 'El usuario asociado no existe' });
+      }
+      campos.push('idUsuario = ?');
+      valores.push(idUsuario);
     }
 
     if (campos.length === 0) {
-      return res.status(400).json({ error: 'No hay campos para actualizar' });
+      return res.status(400).json({ mensaje: 'No hay campos para actualizar' });
     }
 
     campos.push('updated_at = CURRENT_TIMESTAMP');
     valores.push(id, req.admin.adminId);
 
-    await pool.query(
-      `UPDATE tareas SET ${campos.join(', ')} WHERE id = ? AND idAdmin = ?`,
-      valores
-    );
-
-    res.json({ message: 'Tarea actualizada exitosamente' });
+    await pool.query(`UPDATE tareas SET ${campos.join(', ')} WHERE id = ? AND idAdmin = ?`, valores);
+    res.json({ mensaje: 'Tarea actualizada exitosamente' });
   } catch (error) {
     console.error('Error al actualizar tarea:', error);
-    res.status(500).json({ error: 'Error al actualizar tarea' });
+    res.status(500).json({ mensaje: 'Error al actualizar tarea' });
   }
 });
 
-// DELETE /api/tareas/:id - Eliminar tarea
 app.delete('/api/tareas/:id', verificarToken, async (req, res) => {
   try {
     const { id } = req.params;
-
-    const result = await pool.query(
-      'DELETE FROM tareas WHERE id = ? AND idAdmin = ?',
-      [id, req.admin.adminId]
-    );
-
-    if (result[0].affectedRows === 0) {
-      return res.status(404).json({ error: 'Tarea no encontrada' });
+    const [resultado] = await pool.query('DELETE FROM tareas WHERE id = ? AND idAdmin = ?', [id, req.admin.adminId]);
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ mensaje: 'Tarea no encontrada' });
     }
-
-    res.json({ message: 'Tarea eliminada exitosamente' });
+    res.json({ mensaje: 'Tarea eliminada exitosamente' });
   } catch (error) {
     console.error('Error al eliminar tarea:', error);
-    res.status(500).json({ error: 'Error al eliminar tarea' });
+    res.status(500).json({ mensaje: 'Error al eliminar tarea' });
   }
 });
 
-// --- RESTO DE FUNCIONES ---
+async function crearBaseDeDatosIfNotExists() {
+  const poolTemporal = mysql.createPool({
+    host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+    port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
+    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+    password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+    waitForConnections: true,
+    connectionLimit: 1,
+    queueLimit: 0,
+  });
+
+  try {
+    const connTemp = await poolTemporal.getConnection();
+    await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
+    connTemp.release();
+    await poolTemporal.end();
+  } catch (error) {
+    console.error('❌ Error creando base de datos:', error.message);
+    throw error;
+  }
+}
 
 async function inicializarBaseDeDatos() {
   try {
-    // Crear tabla administradores
     await pool.query(`
       CREATE TABLE IF NOT EXISTS administradores (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -350,22 +490,28 @@ async function inicializarBaseDeDatos() {
         password_hash VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
+      ) ENGINE=InnoDB
     `);
-    console.log('✅ Tabla administradores creada');
 
-    // SOLUCIÓN: Verificar si la tabla tareas tiene la estructura correcta (columna idAdmin).
-    // Si no la tiene (porque se creó con tu script manual), la eliminamos para que el backend la recree bien.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(120) NOT NULL,
+        avatar VARCHAR(120) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB
+    `);
+
     try {
-      await pool.query('SELECT idAdmin FROM tareas LIMIT 1');
+      await pool.query('SELECT idUsuario FROM tareas LIMIT 1');
     } catch (error) {
       if (error.code === 'ER_BAD_FIELD_ERROR') {
-        console.log('⚠️ Se detectó la tabla "tareas" incompleta. Recreando estructura correcta...');
+        console.log('⚠️ Se detectó la tabla tareas con estructura antigua. Recreando la tabla.');
         await pool.query('DROP TABLE IF EXISTS tareas');
       }
     }
 
-    // Crear tabla tareas
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tareas (
         id VARCHAR(36) NOT NULL PRIMARY KEY,
@@ -377,14 +523,14 @@ async function inicializarBaseDeDatos() {
         completada TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (idAdmin) REFERENCES administradores(id) ON DELETE CASCADE
-      )
+        FOREIGN KEY (idUsuario) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (idAdmin) REFERENCES administradores(id) ON DELETE CASCADE,
+        INDEX idx_tareas_usuario(idUsuario),
+        INDEX idx_tareas_admin(idAdmin)
+      ) ENGINE=InnoDB
     `);
-    console.log('✅ Tabla tareas creada');
 
-    // Verificar si existe admin por defecto
     const [admins] = await pool.query('SELECT COUNT(*) AS total FROM administradores');
-    
     if (admins[0].total === 0) {
       const passwordHash = await bcrypt.hash('admin123', SALT_ROUNDS);
       await pool.query(
@@ -392,42 +538,22 @@ async function inicializarBaseDeDatos() {
         ['admin', 'Administrador Inicial', passwordHash],
       );
       console.log('✅ Usuario admin creado: usuario=admin, contraseña=admin123');
-    } else {
-      console.log(`✅ ${admins[0].total} administrador(es) encontrado(s)`);
     }
 
+    const [usuarios] = await pool.query('SELECT COUNT(*) AS total FROM usuarios');
+    if (usuarios[0].total === 0) {
+      await pool.query(
+        'INSERT INTO usuarios (nombre, avatar) VALUES (?, ?), (?, ?), (?, ?)',
+        [
+          'Michaell Pulido', 'avatar-1.svg',
+          'María García', 'avatar-2.svg',
+          'Carlos Rivera', 'avatar-3.svg',
+        ],
+      );
+      console.log('✅ Usuarios de ejemplo creados');
+    }
   } catch (error) {
     console.error('❌ Error al inicializar base de datos:', error.message);
-    throw error;
-  }
-}
-
-// ... (Todas tus rutas /api/auth, /api/tareas, etc. se mantienen)
-
-async function crearBaseDatosIfNotExists() {
-  const poolTemporal = mysql.createPool({
-    host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
-    port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
-    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
-    password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
-    waitForConnections: true,
-    connectionLimit: 1,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelayMs: 0,
-  });
-
-  try {
-    const connTemp = await poolTemporal.getConnection();
-    const dbName = process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
-    
-    await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
-    console.log(`✅ Base de datos "${dbName}" lista`);
-    
-    connTemp.release();
-    await poolTemporal.end();
-  } catch (error) {
-    console.error('❌ Error creando base de datos:', error.message);
     throw error;
   }
 }
@@ -438,21 +564,16 @@ async function iniciarServidor() {
     console.log(`   Host: ${process.env.MYSQLHOST || process.env.DB_HOST || 'localhost'}`);
     console.log(`   Puerto: ${process.env.MYSQLPORT || process.env.DB_PORT || 3306}`);
     console.log(`   Usuario: ${process.env.MYSQLUSER || process.env.DB_USER || 'root'}`);
-    console.log(`   Base de datos: ${process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas'}`);
-    
-    // Primero crear la BD si no existe
-    await crearBaseDatosIfNotExists();
+    console.log(`   Base de datos: ${DATABASE}`);
 
-    // Probar conexión
+    await crearBaseDeDatosIfNotExists();
     const connection = await pool.getConnection();
     await connection.ping();
-    console.log('✅ Conectado a la base de datos MySQL');
     connection.release();
+    console.log('✅ Conectado a la base de datos MySQL');
 
-    // Inicializar tablas y datos
     await inicializarBaseDeDatos();
 
-    // Escuchar en 0.0.0.0
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🚀 Servidor listo en el puerto ${PORT}`);
       console.log(`📍 http://localhost:${PORT}\n`);
@@ -460,10 +581,13 @@ async function iniciarServidor() {
   } catch (error) {
     console.error('\n❌ No se pudo iniciar el backend:');
     console.error(`   ${error.message}\n`);
+    if (error.code === 'ENOTFOUND') {
+      console.error('   No se puede resolver el host MySQL. Verifica DB_HOST y tu red.');
+    }
     console.error('Verifica que:');
     console.error('1. MySQL está corriendo (usar XAMPP, WAMP, o servidor remoto)');
-    console.error('2. El usuario "root" existe sin contraseña (o actualiza .env)');
-    console.error('3. Las variables en .env son correctas\n');
+    console.error('2. El usuario y contraseña de MySQL son correctos');
+    console.error('3. Las variables en .env son correctas y alcanzables desde tu entorno local\n');
     process.exit(1);
   }
 }
