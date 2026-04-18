@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
 const path = require('path');
 
-dotenv.config({ path: path.join(__dirname, '.env'), override: true });
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const SALT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
 

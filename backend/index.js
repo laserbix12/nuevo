@@ -7,7 +7,7 @@ const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
 
-dotenv.config({ path: path.join(__dirname, '.env'), override: true });
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -473,6 +473,12 @@ app.delete('/api/tareas/:id', verificarToken, async (req, res) => {
 });
 
 async function crearBaseDeDatosIfNotExists() {
+  // En Railway u otros entornos administrados, la BD ya existe y a veces requiere especificar DB al conectar
+  if (DB_HOST.includes('railway.internal') || process.env.RAILWAY_ENVIRONMENT) {
+    console.log('⚠️ Se omite CREATE DATABASE en este entorno administrado (Railway)');
+    return;
+  }
+
   const poolTemporal = mysql.createPool({
     host: DB_HOST,
     port: DB_PORT,
@@ -485,12 +491,7 @@ async function crearBaseDeDatosIfNotExists() {
 
   try {
     const connTemp = await poolTemporal.getConnection();
-    // En Railway u otros entornos administrados, la BD ya existe y a veces no tenemos permisos de CREATE DATABASE
-    if (DB_HOST.includes('railway.internal') || process.env.RAILWAY_ENVIRONMENT) {
-      console.log('⚠️ Se omite CREATE DATABASE en este entorno administrado (Railway)');
-    } else {
-      await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
-    }
+    await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
     connTemp.release();
     await poolTemporal.end();
   } catch (error) {

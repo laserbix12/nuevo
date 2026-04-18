@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
 const path = require('path');
 
-dotenv.config({ path: path.join(__dirname, '.env'), override: true });
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const DB_HOST = process.env.MYSQL_HOST || process.env.MYSQLHOST || process.env.DB_HOST || 'localhost';
 const DB_PORT = Number(process.env.MYSQL_PORT || process.env.MYSQLPORT || process.env.DB_PORT || 3306);
@@ -22,6 +22,11 @@ const poolConfig = {
 };
 
 async function crearBaseDeDatos() {
+  if (DB_HOST.includes('railway.internal') || process.env.RAILWAY_ENVIRONMENT) {
+    console.log('⚠️ Se omite CREATE DATABASE en este entorno administrado (Railway)');
+    return;
+  }
+
   const poolTemporal = mysql.createPool(poolConfig);
   const connTemp = await poolTemporal.getConnection();
   await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
