@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
+const { buildDbConfig } = require('./db-config');
+const dbConfig = buildDbConfig();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -15,18 +17,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'cambia-esta-clave-en-produccion';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const SALT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
 
-const DB_HOST = process.env.MYSQL_HOST || process.env.MYSQLHOST || process.env.DB_HOST || 'localhost';
-const DB_PORT = Number(process.env.MYSQL_PORT || process.env.MYSQLPORT || process.env.DB_PORT || 3306);
-const DB_USER = process.env.MYSQL_USER || process.env.MYSQLUSER || process.env.DB_USER || 'root';
-const DB_PASSWORD = process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '';
-const DATABASE = process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
-
 const pool = mysql.createPool({
-  host: DB_HOST,
-  port: DB_PORT,
-  user: DB_USER,
-  password: DB_PASSWORD,
-  database: DATABASE,
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user,
+  password: dbConfig.password,
+  database: dbConfig.database,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -474,16 +470,16 @@ app.delete('/api/tareas/:id', verificarToken, async (req, res) => {
 
 async function crearBaseDeDatosIfNotExists() {
   // Solo intentar crear la base de datos en entornos que no sean de producción.
-  if (process.env.NODE_ENV === 'production' || DB_HOST.includes('railway.internal')) {
-    console.log('⚠️ Se omite CREATE DATABASE en entorno de producción/administrado.');
+  if (!dbConfig.shouldAutoCreateDatabase) {
+    console.log('⚠️ Se omite CREATE DATABASE en entorno de producción/administrado según db-config.');
     return;
   }
 
   const poolTemporal = mysql.createPool({
-    host: DB_HOST,
-    port: DB_PORT,
-    user: DB_USER,
-    password: DB_PASSWORD,
+    host: dbConfig.host,
+    port: dbConfig.port,
+    user: dbConfig.user,
+    password: dbConfig.password,
     waitForConnections: true,
     connectionLimit: 1,
     queueLimit: 0,
@@ -491,7 +487,7 @@ async function crearBaseDeDatosIfNotExists() {
 
   try {
     const connTemp = await poolTemporal.getConnection();
-    await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
+    await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\``);
     connTemp.release();
     await poolTemporal.end();
   } catch (error) {
@@ -581,10 +577,10 @@ async function inicializarBaseDeDatos() {
 async function iniciarServidor() {
   try {
     console.log('🔌 Conectando a base de datos...');
-    console.log(`   Host: ${DB_HOST}`);
-    console.log(`   Puerto: ${DB_PORT}`);
-    console.log(`   Usuario: ${DB_USER}`);
-    console.log(`   Base de datos: ${DATABASE}`);
+    console.log(`   Host: ${dbConfig.host}`);
+    console.log(`   Puerto: ${dbConfig.port}`);
+    console.log(`   Usuario: ${dbConfig.user}`);
+    console.log(`   Base de datos: ${dbConfig.database}`);
 
     await crearBaseDeDatosIfNotExists();
     const connection = await pool.getConnection();

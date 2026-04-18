@@ -4,18 +4,14 @@ const dotenv = require('dotenv');
 const path = require('path');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
-
-const DB_HOST = process.env.MYSQL_HOST || process.env.MYSQLHOST || process.env.DB_HOST || 'localhost';
-const DB_PORT = Number(process.env.MYSQL_PORT || process.env.MYSQLPORT || process.env.DB_PORT || 3306);
-const DB_USER = process.env.MYSQL_USER || process.env.MYSQLUSER || process.env.DB_USER || 'root';
-const DB_PASSWORD = process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '';
-const DATABASE = process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
+const { buildDbConfig } = require('./db-config');
+const dbConfig = buildDbConfig();
 
 const poolConfig = {
-  host: DB_HOST,
-  port: DB_PORT,
-  user: DB_USER,
-  password: DB_PASSWORD,
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user,
+  password: dbConfig.password,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -23,20 +19,20 @@ const poolConfig = {
 
 async function crearBaseDeDatos() {
   // Solo intentar crear la base de datos en entornos que no sean de producción.
-  if (process.env.NODE_ENV === 'production' || DB_HOST.includes('railway.internal')) {
-    console.log('⚠️ Se omite CREATE DATABASE en entorno de producción/administrado.');
+  if (!dbConfig.shouldAutoCreateDatabase) {
+    console.log('⚠️ Se omite CREATE DATABASE en entorno de producción/administrado según db-config.');
     return;
   }
 
   const poolTemporal = mysql.createPool(poolConfig);
   const connTemp = await poolTemporal.getConnection();
-  await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
+  await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\``);
   connTemp.release();
   await poolTemporal.end();
 }
 
 async function crearTablas() {
-  const pool = mysql.createPool({ ...poolConfig, database: DATABASE });
+  const pool = mysql.createPool({ ...poolConfig, database: dbConfig.database });
   await pool.query(`
     CREATE TABLE IF NOT EXISTS administradores (
       id INT AUTO_INCREMENT PRIMARY KEY,
