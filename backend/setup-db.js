@@ -22,8 +22,9 @@ const poolConfig = {
 };
 
 async function crearBaseDeDatos() {
-  if (DB_HOST.includes('railway.internal') || process.env.RAILWAY_ENVIRONMENT) {
-    console.log('⚠️ Se omite CREATE DATABASE en este entorno administrado (Railway)');
+  // Solo intentar crear la base de datos en entornos que no sean de producción.
+  if (process.env.NODE_ENV === 'production' || DB_HOST.includes('railway.internal')) {
+    console.log('⚠️ Se omite CREATE DATABASE en entorno de producción/administrado.');
     return;
   }
 
