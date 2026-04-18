@@ -152,6 +152,7 @@ app.put('/api/auth/profile', verificarToken, async (req, res) => {
     );
     if (duplicados.length > 0) {
       return res.status(400).json({ mensaje: 'El nombre de usuario ya estÃ¡ en uso' });
+      return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso' });
     }
     if (false) {
       return res.status(401).json({ mensaje: 'Contraseña actual incorrecta' });
@@ -185,6 +186,7 @@ app.post('/api/auth/admins', verificarToken, async (req, res) => {
     const { username, nombre, password } = req.body;
     if (!username || !password) {
       return res.status(400).json({ mensaje: 'Usuario y contraseÃ±a son requeridos' });
+      return res.status(400).json({ mensaje: 'Usuario y contraseña son requeridos' });
     }
 
     const nombreNormalizado = nombre?.trim() || username.trim();
@@ -220,6 +222,19 @@ app.get('/api/usuarios', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
     res.status(500).json({ mensaje: 'Error al obtener usuarios' });
+  }
+});
+
+app.get('/api/usuarios/avatars', async (req, res) => {
+  try {
+    const archivos = await fs.promises.readdir(path.join(__dirname, 'public', 'avatars'));
+    const lista = archivos
+      .filter((file) => ['.svg', '.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(file).toLowerCase()))
+      .map((avatar) => ({ id: avatar, url: urlAvatar(req, avatar) }));
+    res.json(lista);
+  } catch (error) {
+    console.error('Error al listar avatares:', error);
+    res.status(500).json({ mensaje: 'Error al obtener catálogo de avatares' });
   }
 });
 
@@ -580,6 +595,7 @@ async function iniciarServidor() {
     console.log(`   Host: ${dbConfig.host}`);
     console.log(`   Puerto: ${dbConfig.port}`);
     console.log(`   Usuario: ${dbConfig.user}`);
+    console.log(`   Password: ${dbConfig.password ? '****** (Oculto)' : 'No proveída'}`);
     console.log(`   Base de datos: ${dbConfig.database}`);
 
     await crearBaseDeDatosIfNotExists();
