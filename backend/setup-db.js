@@ -1,16 +1,14 @@
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
-const dotenv = require('dotenv');
-const path = require('path');
+const { buildDbConfig } = require('./db-config');
 
-dotenv.config({ path: path.join(__dirname, '.env'), override: true });
-
-const DATABASE = process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
+const dbConfig = buildDbConfig();
+const DATABASE = dbConfig.database;
 const poolConfig = {
-  host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
-  port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
-  user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
-  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user,
+  password: dbConfig.password,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

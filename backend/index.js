@@ -3,24 +3,28 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
+const { buildDbConfig, envFirst } = require('./db-config');
 
-dotenv.config({ path: path.join(__dirname, '.env'), override: true });
+const dbConfig = buildDbConfig();
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
-const JWT_SECRET = process.env.JWT_SECRET || 'cambia-esta-clave-en-produccion';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
-const SALT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
-const DATABASE = process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
+const PORT = Number(envFirst('PORT') || 3000);
+const JWT_SECRET = envFirst('JWT_SECRET') || 'cambia-esta-clave-en-produccion';
+const JWT_EXPIRES_IN = envFirst('JWT_EXPIRES_IN') || '8h';
+const SALT_ROUNDS = Number(envFirst('BCRYPT_ROUNDS') || 10);
+const DB_HOST = dbConfig.host;
+const DB_PORT = dbConfig.port;
+const DB_USER = dbConfig.user;
+const DB_PASSWORD = dbConfig.password;
+const DATABASE = dbConfig.database;
 
 const pool = mysql.createPool({
-  host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
-  port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
-  user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
-  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+  host: DB_HOST,
+  port: DB_PORT,
+  user: DB_USER,
+  password: DB_PASSWORD,
   database: DATABASE,
   waitForConnections: true,
   connectionLimit: 10,
@@ -76,6 +80,10 @@ function verificarToken(req, res, next) {
 
 function urlAvatar(req, avatarFileName) {
   return `${req.protocol}://${req.get('host')}/api/avatars/${avatarFileName}`;
+}
+
+function describeDbError(error) {
+  return error?.sqlMessage || error?.message || error?.code || error?.errno || 'Error desconocido';
 }
 
 app.get('/api/health', (_req, res) => {
@@ -469,10 +477,10 @@ app.delete('/api/tareas/:id', verificarToken, async (req, res) => {
 
 async function crearBaseDeDatosIfNotExists() {
   const poolTemporal = mysql.createPool({
-    host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
-    port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
-    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
-    password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+    host: DB_HOST,
+    port: DB_PORT,
+    user: DB_USER,
+    password: DB_PASSWORD,
     waitForConnections: true,
     connectionLimit: 1,
     queueLimit: 0,
@@ -570,12 +578,16 @@ async function inicializarBaseDeDatos() {
 async function iniciarServidor() {
   try {
     console.log('🔌 Conectando a base de datos...');
-    console.log(`   Host: ${process.env.MYSQLHOST || process.env.DB_HOST || 'localhost'}`);
-    console.log(`   Puerto: ${process.env.MYSQLPORT || process.env.DB_PORT || 3306}`);
-    console.log(`   Usuario: ${process.env.MYSQLUSER || process.env.DB_USER || 'root'}`);
+    console.log(`   Host: ${DB_HOST}`);
+    console.log(`   Puerto: ${DB_PORT}`);
+    console.log(`   Usuario: ${DB_USER}`);
     console.log(`   Base de datos: ${DATABASE}`);
 
-    await crearBaseDeDatosIfNotExists();
+    if (dbConfig.shouldAutoCreateDatabase) {
+      await crearBaseDeDatosIfNotExists();
+    } else {
+      console.log('   Se omite CREATE DATABASE en este entorno');
+    }
     const connection = await pool.getConnection();
     await connection.ping();
     connection.release();
