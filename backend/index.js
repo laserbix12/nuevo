@@ -151,7 +151,6 @@ app.put('/api/auth/profile', verificarToken, async (req, res) => {
       [usernameNormalizado, req.admin.adminId],
     );
     if (duplicados.length > 0) {
-      return res.status(400).json({ mensaje: 'El nombre de usuario ya estÃ¡ en uso' });
       return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso' });
     }
     if (false) {
@@ -185,7 +184,6 @@ app.post('/api/auth/admins', verificarToken, async (req, res) => {
   try {
     const { username, nombre, password } = req.body;
     if (!username || !password) {
-      return res.status(400).json({ mensaje: 'Usuario y contraseÃ±a son requeridos' });
       return res.status(400).json({ mensaje: 'Usuario y contraseña son requeridos' });
     }
 
@@ -241,13 +239,6 @@ app.get('/api/usuarios/avatars', async (req, res) => {
 app.get('/api/usuarios/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    if (id === 'avatars') {
-      const archivos = await fs.promises.readdir(path.join(__dirname, 'public', 'avatars'));
-      const lista = archivos
-        .filter((file) => ['.svg', '.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(file).toLowerCase()))
-        .map((avatar) => ({ id: avatar, url: urlAvatar(req, avatar) }));
-      return res.json(lista);
-    }
 
     const [usuarios] = await pool.query('SELECT id, nombre, avatar FROM usuarios WHERE id = ?', [id]);
     if (usuarios.length === 0) {
@@ -264,19 +255,6 @@ app.get('/api/usuarios/:id', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener usuario:', error);
     res.status(500).json({ mensaje: 'Error al obtener usuario' });
-  }
-});
-
-app.get('/api/usuarios/avatars', async (req, res) => {
-  try {
-    const archivos = await fs.promises.readdir(path.join(__dirname, 'public', 'avatars'));
-    const lista = archivos
-      .filter((file) => ['.svg', '.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(file).toLowerCase()))
-      .map((avatar) => ({ id: avatar, url: urlAvatar(req, avatar) }));
-    res.json(lista);
-  } catch (error) {
-    console.error('Error al listar avatares:', error);
-    res.status(500).json({ mensaje: 'Error al obtener catálogo de avatares' });
   }
 });
 
