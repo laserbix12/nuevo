@@ -1,7 +1,4 @@
-const dotenv = require('dotenv');
-const path = require('path');
-
-dotenv.config({ path: path.join(__dirname, '.env') });
+require('dotenv').config();
 
 function envFirst(...keys) {
   for (const key of keys) {
@@ -52,16 +49,16 @@ function parseMysqlUrl(connectionString) {
 function buildDbConfig() {
   const urlConfig = parseMysqlUrl(envFirst('MYSQL_URL', 'DATABASE_URL'));
 
-  const host = envFirst('MYSQL_HOST', 'MYSQLHOST', 'DB_HOST') || urlConfig.host || 'localhost';
-  const database = envFirst('MYSQL_DATABASE', 'MYSQLDATABASE', 'DB_NAME') || urlConfig.database || 'tareas';
+  const host = urlConfig.host || envFirst('MYSQL_HOST', 'MYSQLHOST', 'DB_HOST') || 'localhost';
+  const database = urlConfig.database || envFirst('MYSQL_DATABASE', 'MYSQLDATABASE', 'DB_NAME') || 'tareas';
   const autoCreateFromEnv = parseBoolean(envFirst('DB_AUTO_CREATE'));
   const shouldAutoCreateDatabase = autoCreateFromEnv ?? ['localhost', '127.0.0.1'].includes(host);
 
   return {
     host,
-    port: Number(envFirst('MYSQL_PORT', 'MYSQLPORT', 'DB_PORT') || urlConfig.port || 3306),
-    user: envFirst('MYSQL_USER', 'MYSQLUSER', 'DB_USER') || urlConfig.user || 'root',
-    password: envFirst('MYSQL_PASSWORD', 'MYSQLPASSWORD', 'DB_PASSWORD') || urlConfig.password || '',
+    port: urlConfig.port || Number(envFirst('MYSQL_PORT', 'MYSQLPORT', 'DB_PORT') || 3306),
+    user: urlConfig.user || envFirst('MYSQL_USER', 'MYSQLUSER', 'DB_USER') || 'root',
+    password: urlConfig.password !== undefined ? urlConfig.password : (envFirst('MYSQL_PASSWORD', 'MYSQLPASSWORD', 'DB_PASSWORD') || ''),
     database,
     shouldAutoCreateDatabase,
   };
