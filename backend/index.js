@@ -593,6 +593,9 @@ async function iniciarServidor() {
     console.error(`   ${error.message}\n`);
     if (error.code === 'ENOTFOUND') {
       console.error('   No se puede resolver el host MySQL. Verifica DB_HOST y tu red.');
+    } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.error('   ⚠️ Contraseña rechazada por MySQL.');
+      console.error('   💡 En Railway, esto ocurre si hay un "Volumen" huérfano con una contraseña vieja. Elimina la base de datos Y su volumen, o crea un proyecto nuevo en Railway.');
     }
     console.error('Verifica que:');
     console.error('1. MySQL está corriendo (usar XAMPP, WAMP, o servidor remoto)');
