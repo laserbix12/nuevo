@@ -1,13 +1,13 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const dotenv = require('dotenv');
 const fs = require('fs');
-const path = require('path');
 
-dotenv.config({ path: path.join(__dirname, '.env') });
 const { buildDbConfig } = require('./db-config');
 const dbConfig = buildDbConfig();
 
