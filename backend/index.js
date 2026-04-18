@@ -3,22 +3,23 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
-const { buildDbConfig, envFirst } = require('./db-config');
 
-const dbConfig = buildDbConfig();
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 const app = express();
-const PORT = Number(envFirst('PORT') || 3000);
-const JWT_SECRET = envFirst('JWT_SECRET') || 'cambia-esta-clave-en-produccion';
-const JWT_EXPIRES_IN = envFirst('JWT_EXPIRES_IN') || '8h';
-const SALT_ROUNDS = Number(envFirst('BCRYPT_ROUNDS') || 10);
-const DB_HOST = dbConfig.host;
-const DB_PORT = dbConfig.port;
-const DB_USER = dbConfig.user;
-const DB_PASSWORD = dbConfig.password;
-const DATABASE = dbConfig.database;
+const PORT = Number(process.env.PORT || 3000);
+const JWT_SECRET = process.env.JWT_SECRET || 'cambia-esta-clave-en-produccion';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
+const SALT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
+
+const DB_HOST = process.env.MYSQL_HOST || process.env.MYSQLHOST || process.env.DB_HOST || 'localhost';
+const DB_PORT = Number(process.env.MYSQL_PORT || process.env.MYSQLPORT || process.env.DB_PORT || 3306);
+const DB_USER = process.env.MYSQL_USER || process.env.MYSQLUSER || process.env.DB_USER || 'root';
+const DB_PASSWORD = process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '';
+const DATABASE = process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
 
 const pool = mysql.createPool({
   host: DB_HOST,
@@ -80,10 +81,6 @@ function verificarToken(req, res, next) {
 
 function urlAvatar(req, avatarFileName) {
   return `${req.protocol}://${req.get('host')}/api/avatars/${avatarFileName}`;
-}
-
-function describeDbError(error) {
-  return error?.sqlMessage || error?.message || error?.code || error?.errno || 'Error desconocido';
 }
 
 app.get('/api/health', (_req, res) => {
@@ -488,7 +485,12 @@ async function crearBaseDeDatosIfNotExists() {
 
   try {
     const connTemp = await poolTemporal.getConnection();
-    await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
+    // En Railway u otros entornos administrados, la BD ya existe y a veces no tenemos permisos de CREATE DATABASE
+    if (DB_HOST.includes('railway.internal') || process.env.RAILWAY_ENVIRONMENT) {
+      console.log('⚠️ Se omite CREATE DATABASE en este entorno administrado (Railway)');
+    } else {
+      await connTemp.query(`CREATE DATABASE IF NOT EXISTS \`${DATABASE}\``);
+    }
     connTemp.release();
     await poolTemporal.end();
   } catch (error) {
@@ -583,11 +585,7 @@ async function iniciarServidor() {
     console.log(`   Usuario: ${DB_USER}`);
     console.log(`   Base de datos: ${DATABASE}`);
 
-    if (dbConfig.shouldAutoCreateDatabase) {
-      await crearBaseDeDatosIfNotExists();
-    } else {
-      console.log('   Se omite CREATE DATABASE en este entorno');
-    }
+    await crearBaseDeDatosIfNotExists();
     const connection = await pool.getConnection();
     await connection.ping();
     connection.release();

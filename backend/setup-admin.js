@@ -1,18 +1,25 @@
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
-const { buildDbConfig, envFirst } = require('./db-config');
+const dotenv = require('dotenv');
+const path = require('path');
 
-const dbConfig = buildDbConfig();
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
-const SALT_ROUNDS = Number(envFirst('BCRYPT_ROUNDS') || 10);
+const SALT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
+
+const DB_HOST = process.env.MYSQL_HOST || process.env.MYSQLHOST || process.env.DB_HOST || 'localhost';
+const DB_PORT = Number(process.env.MYSQL_PORT || process.env.MYSQLPORT || process.env.DB_PORT || 3306);
+const DB_USER = process.env.MYSQL_USER || process.env.MYSQLUSER || process.env.DB_USER || 'root';
+const DB_PASSWORD = process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '';
+const DATABASE = process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || process.env.DB_NAME || 'tareas';
 
 async function setupAdmin() {
   const pool = mysql.createPool({
-    host: dbConfig.host,
-    port: dbConfig.port,
-    user: dbConfig.user,
-    password: dbConfig.password,
-    database: dbConfig.database,
+    host: DB_HOST,
+    port: DB_PORT,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DATABASE,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
