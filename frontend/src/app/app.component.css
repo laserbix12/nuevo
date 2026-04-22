@@ -385,6 +385,40 @@ textarea {
   cursor: not-allowed;
 }
 
+.btn-action--reopen {
+  color: #ffd166;
+}
+
+.btn-reopen {
+  border: none;
+  border-radius: 999px;
+  padding: 11px 20px;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(180deg, #ffd166, #f5b731);
+  color: #2a1e00;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.task-card {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.task-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(128, 255, 114, 0.28);
+  box-shadow: 0 8px 28px rgba(90, 241, 79, 0.08);
+}
+
+.detail-modal h2 {
+  font-size: 1.6rem;
+}
+
+.detail-modal .task-desc {
+  line-height: 1.7;
+  color: #d4dbe6;
+}
+
 .no-tasks {
   color: var(--text-soft);
   text-align: center;

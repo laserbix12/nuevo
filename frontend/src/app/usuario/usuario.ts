@@ -50,7 +50,12 @@ import { Tarea, Usuario, UsuarioService } from '../usuario.service';
         } @else {
           <div class="task-list">
             @for (tarea of tareas(); track tarea.id) {
-              <article class="task-card" [class.task-card-done]="tarea.completada">
+              <article
+                class="task-card"
+                [class.task-card-done]="tarea.completada"
+                (click)="abrirDetalle(tarea, $event)"
+                style="cursor: pointer;"
+              >
                 <div class="task-top old-style">
                   <div>
                     <span class="chip" [class.success]="tarea.completada">
@@ -64,15 +69,16 @@ import { Tarea, Usuario, UsuarioService } from '../usuario.service';
                 <p class="task-desc">{{ tarea.desc }}</p>
 
                 @if (sesionActiva()) {
-                  <div class="btn-footer">
+                  <div class="btn-footer" (click)="$event.stopPropagation()">
                     <button type="button" class="btn-action" (click)="abrirModalEditar(tarea)">Editar</button>
                     <button
                       type="button"
-                      class="btn-action btn-action--success"
-                      (click)="completar(tarea.id)"
-                      [disabled]="tarea.completada"
+                      class="btn-action"
+                      [class.btn-action--success]="!tarea.completada"
+                      [class.btn-action--reopen]="tarea.completada"
+                      (click)="toggleEstado(tarea)"
                     >
-                      Terminar
+                      {{ tarea.completada ? 'Reabrir' : 'Terminar' }}
                     </button>
                     <button type="button" class="btn-action btn-action--danger" (click)="eliminar(tarea.id)">Eliminar</button>
                   </div>
@@ -82,6 +88,32 @@ import { Tarea, Usuario, UsuarioService } from '../usuario.service';
           </div>
         }
       </section>
+
+      @if (detalleAbierto()) {
+        <div class="modal-overlay" (click)="cerrarDetalle($event)">
+          <section class="modal-content detail-modal">
+            <span class="chip" [class.success]="tareaDetalle()?.completada" style="margin-bottom: 12px;">
+              {{ tareaDetalle()?.completada ? 'Completada' : 'Pendiente' }}
+            </span>
+            <h2 style="margin-top: 0;">{{ tareaDetalle()?.titulo }}</h2>
+            <p class="task-date" style="margin-bottom: 16px;">{{ tareaDetalle()?.fecha | date:"EEEE, d 'de' MMMM 'de' y, h:mm a" | lowercase }}</p>
+            <p class="task-desc" style="margin-bottom: 24px; white-space: pre-wrap;">{{ tareaDetalle()?.desc }}</p>
+            <div class="modal-footer">
+              @if (sesionActiva()) {
+                <button type="button" class="btn-edit" (click)="cerrarDetalleYEditar()">Editar</button>
+                <button
+                  type="button"
+                  [class]="tareaDetalle()?.completada ? 'btn-reopen' : 'btn-create'"
+                  (click)="toggleEstadoDesdeDetalle()"
+                >
+                  {{ tareaDetalle()?.completada ? 'Reabrir' : 'Terminar' }}
+                </button>
+              }
+              <button type="button" class="btn-cancel" (click)="cerrarDetalleSolo()">Cerrar</button>
+            </div>
+          </section>
+        </div>
+      }
 
       @if (modalAbierto()) {
         <div class="modal-overlay" (click)="cerrarModalPorFondo($event)">
@@ -140,6 +172,8 @@ export class UsuarioDetalle implements OnInit {
   readonly sesionActiva = this.authService.sesionActiva;
   readonly skeletons = Array.from({ length: 3 });
   readonly hayTareas = computed(() => this.tareas().length > 0);
+  readonly detalleAbierto = signal(false);
+  readonly tareaDetalle = signal<Tarea | null>(null);
 
   tareaEditandoId: string | null = null;
   formulario: GuardarTareaPayload = this.tareasService.crearNuevaTareaVacia();
@@ -276,22 +310,59 @@ export class UsuarioDetalle implements OnInit {
     });
   }
 
-  completar(tareaId: string) {
+  toggleEstado(tarea: Tarea) {
     if (!this.usuario || !this.sesionActiva()) {
       return;
     }
 
-    this.tareasService.completarTarea(tareaId).subscribe({
+    const nuevoEstado = !tarea.completada;
+    this.tareasService.toggleCompletada(tarea.id, nuevoEstado).subscribe({
       next: () => {
         this.tipoMensaje.set('ok');
-        this.mensajeEstado.set('Tarea completada.');
+        this.mensajeEstado.set(nuevoEstado ? 'Tarea completada.' : 'Tarea reabierta.');
         this.cargarTareas(this.usuario!.id);
       },
       error: (error) => {
         this.tipoMensaje.set('error');
-        this.mensajeEstado.set(error.error?.mensaje ?? 'No se pudo completar la tarea.');
+        this.mensajeEstado.set(error.error?.mensaje ?? 'No se pudo cambiar el estado de la tarea.');
       },
     });
+  }
+
+  abrirDetalle(tarea: Tarea, event: Event) {
+    // Open task detail modal on single click on the card
+    this.tareaDetalle.set(tarea);
+    this.detalleAbierto.set(true);
+  }
+
+  cerrarDetalle(event: Event) {
+    if (event.target === event.currentTarget) {
+      this.detalleAbierto.set(false);
+      this.tareaDetalle.set(null);
+    }
+  }
+
+  cerrarDetalleSolo() {
+    this.detalleAbierto.set(false);
+    this.tareaDetalle.set(null);
+  }
+
+  cerrarDetalleYEditar() {
+    const tarea = this.tareaDetalle();
+    this.detalleAbierto.set(false);
+    this.tareaDetalle.set(null);
+    if (tarea) {
+      this.abrirModalEditar(tarea);
+    }
+  }
+
+  toggleEstadoDesdeDetalle() {
+    const tarea = this.tareaDetalle();
+    if (tarea) {
+      this.detalleAbierto.set(false);
+      this.tareaDetalle.set(null);
+      this.toggleEstado(tarea);
+    }
   }
 
   eliminar(tareaId: string) {

@@ -95,9 +95,9 @@ export class TareasService {
     }, this.getAuthHeaders());
   }
 
-  completarTarea(tareaId: string) {
+  toggleCompletada(tareaId: string, completada: boolean) {
     return this.http.put(`${this.apiUrl}/${tareaId}`, {
-      completada: true,
+      completada,
     }, this.getAuthHeaders());
   }
 
