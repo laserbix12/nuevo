@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist/nuevo/browser",
+  "installCommand": "echo 'skip root install'",
+  "framework": null
+}
