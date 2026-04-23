@@ -55,6 +55,7 @@ import { AuthService } from './servicios/auth.service';
                 [routerLink]="['/usuario', usuario.id]"
                 routerLinkActive="active"
                 [routerLinkActiveOptions]="{ exact: true }"
+                (click)="cerrarPaneles()"
               >
                 <img [src]="usuario.foto" class="avatar" [alt]="usuario.nombre" />
                 <span>{{ usuario.nombre }}</span>
@@ -149,7 +150,7 @@ import { AuthService } from './servicios/auth.service';
               } @else {
                 <div class="user-list">
                   @for (usuario of usuarios(); track usuario.id) {
-                    <article class="user-card">
+                    <article class="user-card" (click)="seleccionarUsuario(usuario)" style="cursor: pointer;" title="Ver tareas de {{ usuario.nombre }}">
                       <div class="user-card-details">
                         <img [src]="usuario.foto" [alt]="usuario.nombre" />
                         <div>
@@ -158,9 +159,9 @@ import { AuthService } from './servicios/auth.service';
                         </div>
                       </div>
                       <div class="user-card-buttons">
-                        <button type="button" class="btn-edit" (click)="abrirModalEditarUsuario(usuario)">Editar</button>
-                        <button type="button" class="btn-create" (click)="seleccionarUsuario(usuario)">Ver tareas</button>
-                        <button type="button" class="btn-delete" (click)="eliminarUsuario(usuario)">Eliminar</button>
+                        <button type="button" class="btn-edit" (click)="abrirModalEditarUsuario(usuario); $event.stopPropagation()">Editar</button>
+                        <button type="button" class="btn-create">Ver tareas</button>
+                        <button type="button" class="btn-delete" (click)="eliminarUsuario(usuario); $event.stopPropagation()">Eliminar</button>
                       </div>
                     </article>
                   }
@@ -377,6 +378,7 @@ export class Home {
 
   seleccionarUsuario(usuario: Usuario) {
     this.router.navigate(['/usuario', usuario.id]);
+    this.cerrarPaneles();
   }
 
   volverAlInicio() {
