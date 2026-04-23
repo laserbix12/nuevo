@@ -1,0 +1,44 @@
+# render.yaml — Configuración de despliegue para Render.com
+# Docs: https://docs.render.com/blueprint-spec
+
+services:
+  # ── Backend API (Node.js) ──
+  - type: web
+    name: sena-backend
+    runtime: node
+    region: ohio
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node index.js
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      # Base de datos TiDB Cloud
+      - key: DB_HOST
+        value: gateway01.us-east-1.prod.aws.tidbcloud.com
+      - key: DB_PORT
+        value: "4000"
+      - key: DB_USER
+        sync: false  # Configurar manualmente en Render Dashboard
+      - key: DB_PASSWORD
+        sync: false  # Configurar manualmente en Render Dashboard
+      - key: DB_NAME
+        value: test
+      - key: DB_SSL
+        value: "true"
+      - key: DB_AUTO_CREATE
+        value: "false"
+      # Servidor
+      - key: PORT
+        value: "3000"
+      # JWT — Cambiar en producción
+      - key: JWT_SECRET
+        generateValue: true  # Render genera un valor aleatorio seguro
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      # Seguridad
+      - key: BCRYPT_ROUNDS
+        value: "10"
+      # CORS — URL del frontend en Vercel
+      - key: FRONTEND_URL
+        value: https://nuevo-zeta-navy.vercel.app

@@ -23,6 +23,7 @@ const pool = mysql.createPool({
   user: dbConfig.user,
   password: dbConfig.password,
   database: dbConfig.database,
+  ssl: dbConfig.ssl,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -473,6 +474,7 @@ async function crearBaseDeDatosIfNotExists() {
     port: dbConfig.port,
     user: dbConfig.user,
     password: dbConfig.password,
+    ssl: dbConfig.ssl,
     waitForConnections: true,
     connectionLimit: 1,
     queueLimit: 0,
@@ -491,6 +493,7 @@ async function crearBaseDeDatosIfNotExists() {
 
 async function inicializarBaseDeDatos() {
   try {
+    // ── 1. Tabla administradores ──
     await pool.query(`
       CREATE TABLE IF NOT EXISTS administradores (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -501,7 +504,9 @@ async function inicializarBaseDeDatos() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB
     `);
+    console.log('  ✔ Tabla administradores OK');
 
+    // ── 2. Tabla usuarios ──
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -511,7 +516,9 @@ async function inicializarBaseDeDatos() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB
     `);
+    console.log('  ✔ Tabla usuarios OK');
 
+    // ── 3. Auto-healing: detectar tabla tareas con estructura antigua ──
     try {
       await pool.query('SELECT idUsuario FROM tareas LIMIT 1');
     } catch (error) {
@@ -521,6 +528,7 @@ async function inicializarBaseDeDatos() {
       }
     }
 
+    // ── 4. Tabla tareas ──
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tareas (
         id VARCHAR(36) NOT NULL PRIMARY KEY,
@@ -539,6 +547,28 @@ async function inicializarBaseDeDatos() {
       ) ENGINE=InnoDB
     `);
 
+    // ── 5. Auto-healing: agregar columna idAdmin si falta ──
+    try {
+      const [cols] = await pool.query(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tareas' AND COLUMN_NAME = 'idAdmin'",
+        [dbConfig.database]
+      );
+      if (cols.length === 0) {
+        console.log('⚠️ Columna idAdmin faltante en tareas. Agregando...');
+        await pool.query('ALTER TABLE tareas ADD COLUMN idAdmin INT NOT NULL DEFAULT 1 AFTER idUsuario');
+        try {
+          await pool.query('ALTER TABLE tareas ADD INDEX idx_tareas_admin (idAdmin)');
+          await pool.query('ALTER TABLE tareas ADD FOREIGN KEY (idAdmin) REFERENCES administradores(id) ON DELETE CASCADE');
+        } catch (_e) { /* índice o FK ya existe */ }
+        console.log('  ✔ Columna idAdmin agregada exitosamente');
+      }
+    } catch (healError) {
+      console.warn('⚠️ Auto-healing idAdmin omitido:', healError.message);
+    }
+
+    console.log('  ✔ Tabla tareas OK');
+
+    // ── 6. Datos semilla ──
     const [admins] = await pool.query('SELECT COUNT(*) AS total FROM administradores');
     if (admins[0].total === 0) {
       const passwordHash = await bcrypt.hash('admin123', SALT_ROUNDS);
@@ -546,7 +576,7 @@ async function inicializarBaseDeDatos() {
         'INSERT INTO administradores (username, nombre, password_hash) VALUES (?, ?, ?)',
         ['admin', 'Administrador Inicial', passwordHash],
       );
-      console.log('✅ Usuario admin creado: usuario=admin, contraseña=admin123');
+      console.log('  ✔ Usuario admin creado: usuario=admin, contraseña=admin123');
     }
 
     const [usuarios] = await pool.query('SELECT COUNT(*) AS total FROM usuarios');
@@ -559,8 +589,10 @@ async function inicializarBaseDeDatos() {
           'Carlos Rivera', 'avatar-3.svg',
         ],
       );
-      console.log('✅ Usuarios de ejemplo creados');
+      console.log('  ✔ Usuarios de ejemplo creados');
     }
+
+    console.log('✅ Base de datos inicializada correctamente');
   } catch (error) {
     console.error('❌ Error al inicializar base de datos:', error.message);
     throw error;
@@ -575,6 +607,7 @@ async function iniciarServidor() {
     console.log(`   Usuario: ${dbConfig.user}`);
     console.log(`   Password: ${dbConfig.password ? '****** (Oculto)' : 'No proveída'}`);
     console.log(`   Base de datos: ${dbConfig.database}`);
+    console.log(`   SSL: ${dbConfig.ssl ? 'Activado ✔' : 'Desactivado'}`);
 
     await crearBaseDeDatosIfNotExists();
     const connection = await pool.getConnection();
@@ -595,12 +628,16 @@ async function iniciarServidor() {
       console.error('   No se puede resolver el host MySQL. Verifica DB_HOST y tu red.');
     } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
       console.error('   ⚠️ Contraseña rechazada por MySQL.');
-      console.error('   💡 En Railway, esto ocurre si hay un "Volumen" huérfano con una contraseña vieja. Elimina la base de datos Y su volumen, o crea un proyecto nuevo en Railway.');
+    } else if (error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || error.code === 'CERT_HAS_EXPIRED') {
+      console.error('   🔒 Error de certificado SSL. Verifica DB_SSL_CA o establece DB_SSL=true.');
+    } else if (error.message?.includes('ssl')) {
+      console.error('   🔒 Conexión SSL rechazada. TiDB Cloud requiere DB_SSL=true en tu .env.');
     }
     console.error('Verifica que:');
-    console.error('1. MySQL está corriendo (usar XAMPP, WAMP, o servidor remoto)');
-    console.error('2. El usuario y contraseña de MySQL son correctos');
-    console.error('3. Las variables en .env son correctas y alcanzables desde tu entorno local\n');
+    console.error('1. MySQL/TiDB Cloud está corriendo y es alcanzable');
+    console.error('2. El usuario y contraseña son correctos');
+    console.error('3. Las variables en .env son correctas');
+    console.error('4. Si usas TiDB Cloud, DB_SSL=true debe estar en .env\n');
     process.exit(1);
   }
 }
