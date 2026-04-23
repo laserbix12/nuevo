@@ -492,9 +492,14 @@ async function crearBaseDeDatosIfNotExists() {
 }
 
 async function inicializarBaseDeDatos() {
+  const healingLog = [];
+  let healingCount = 0;
+
   try {
+    console.log('\n🔧 AUTO-HEALING: Verificando estructura de base de datos...');
+
     // ── 1. Tabla administradores ──
-    await pool.query(`
+    const [adminTableResult] = await pool.query(`
       CREATE TABLE IF NOT EXISTS administradores (
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
@@ -504,10 +509,15 @@ async function inicializarBaseDeDatos() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB
     `);
-    console.log('  ✔ Tabla administradores OK');
+    if (adminTableResult.warningStatus === 0) {
+      healingLog.push('📦 Tabla "administradores" → CREADA');
+      healingCount++;
+    } else {
+      healingLog.push('✔  Tabla "administradores" → ya existe');
+    }
 
     // ── 2. Tabla usuarios ──
-    await pool.query(`
+    const [userTableResult] = await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
         nombre VARCHAR(120) NOT NULL,
@@ -516,20 +526,28 @@ async function inicializarBaseDeDatos() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB
     `);
-    console.log('  ✔ Tabla usuarios OK');
+    if (userTableResult.warningStatus === 0) {
+      healingLog.push('📦 Tabla "usuarios"        → CREADA');
+      healingCount++;
+    } else {
+      healingLog.push('✔  Tabla "usuarios"        → ya existe');
+    }
 
     // ── 3. Auto-healing: detectar tabla tareas con estructura antigua ──
+    let tareasRecreada = false;
     try {
       await pool.query('SELECT idUsuario FROM tareas LIMIT 1');
     } catch (error) {
       if (error.code === 'ER_BAD_FIELD_ERROR') {
-        console.log('⚠️ Se detectó la tabla tareas con estructura antigua. Recreando la tabla.');
+        healingLog.push('🔄 Tabla "tareas"          → estructura antigua detectada, RECREANDO');
         await pool.query('DROP TABLE IF EXISTS tareas');
+        tareasRecreada = true;
+        healingCount++;
       }
     }
 
     // ── 4. Tabla tareas ──
-    await pool.query(`
+    const [tareasTableResult] = await pool.query(`
       CREATE TABLE IF NOT EXISTS tareas (
         id VARCHAR(36) NOT NULL PRIMARY KEY,
         titulo VARCHAR(255) NOT NULL,
@@ -546,6 +564,12 @@ async function inicializarBaseDeDatos() {
         INDEX idx_tareas_admin(idAdmin)
       ) ENGINE=InnoDB
     `);
+    if (!tareasRecreada && tareasTableResult.warningStatus === 0) {
+      healingLog.push('📦 Tabla "tareas"          → CREADA');
+      healingCount++;
+    } else if (!tareasRecreada) {
+      healingLog.push('✔  Tabla "tareas"          → ya existe');
+    }
 
     // ── 5. Auto-healing: agregar columna idAdmin si falta ──
     try {
@@ -554,21 +578,38 @@ async function inicializarBaseDeDatos() {
         [dbConfig.database]
       );
       if (cols.length === 0) {
-        console.log('⚠️ Columna idAdmin faltante en tareas. Agregando...');
         await pool.query('ALTER TABLE tareas ADD COLUMN idAdmin INT NOT NULL DEFAULT 1 AFTER idUsuario');
         try {
           await pool.query('ALTER TABLE tareas ADD INDEX idx_tareas_admin (idAdmin)');
           await pool.query('ALTER TABLE tareas ADD FOREIGN KEY (idAdmin) REFERENCES administradores(id) ON DELETE CASCADE');
         } catch (_e) { /* índice o FK ya existe */ }
-        console.log('  ✔ Columna idAdmin agregada exitosamente');
+        healingLog.push('🩹 Columna "idAdmin"       → AGREGADA a tareas');
+        healingCount++;
+      } else {
+        healingLog.push('✔  Columna "idAdmin"       → presente');
       }
     } catch (healError) {
-      console.warn('⚠️ Auto-healing idAdmin omitido:', healError.message);
+      healingLog.push('⚠️  Columna "idAdmin"       → verificación omitida: ' + healError.message);
     }
 
-    console.log('  ✔ Tabla tareas OK');
+    // ── 6. Auto-healing: verificar columna completada ──
+    try {
+      const [cols] = await pool.query(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tareas' AND COLUMN_NAME = 'completada'",
+        [dbConfig.database]
+      );
+      if (cols.length === 0) {
+        await pool.query('ALTER TABLE tareas ADD COLUMN completada TINYINT(1) NOT NULL DEFAULT 0 AFTER idAdmin');
+        healingLog.push('🩹 Columna "completada"    → AGREGADA a tareas');
+        healingCount++;
+      } else {
+        healingLog.push('✔  Columna "completada"    → presente');
+      }
+    } catch (healError) {
+      healingLog.push('⚠️  Columna "completada"    → verificación omitida: ' + healError.message);
+    }
 
-    // ── 6. Datos semilla ──
+    // ── 7. Datos semilla ──
     const [admins] = await pool.query('SELECT COUNT(*) AS total FROM administradores');
     if (admins[0].total === 0) {
       const passwordHash = await bcrypt.hash('admin123', SALT_ROUNDS);
@@ -576,7 +617,10 @@ async function inicializarBaseDeDatos() {
         'INSERT INTO administradores (username, nombre, password_hash) VALUES (?, ?, ?)',
         ['admin', 'Administrador Inicial', passwordHash],
       );
-      console.log('  ✔ Usuario admin creado: usuario=admin, contraseña=admin123');
+      healingLog.push('🌱 Seed "admin"            → usuario admin CREADO (admin / admin123)');
+      healingCount++;
+    } else {
+      healingLog.push('✔  Seed "admin"            → ya existe (' + admins[0].total + ' admins)');
     }
 
     const [usuarios] = await pool.query('SELECT COUNT(*) AS total FROM usuarios');
@@ -589,10 +633,28 @@ async function inicializarBaseDeDatos() {
           'Carlos Rivera', 'avatar-3.svg',
         ],
       );
-      console.log('  ✔ Usuarios de ejemplo creados');
+      healingLog.push('🌱 Seed "usuarios"         → 3 usuarios de ejemplo CREADOS');
+      healingCount++;
+    } else {
+      healingLog.push('✔  Seed "usuarios"         → ya existen (' + usuarios[0].total + ' usuarios)');
     }
 
-    console.log('✅ Base de datos inicializada correctamente');
+    // ── Reporte de auto-healing ──
+    console.log('┌──────────────────────────────────────────────────────┐');
+    console.log('│          🏥  REPORTE AUTO-HEALING                   │');
+    console.log('├──────────────────────────────────────────────────────┤');
+    for (const line of healingLog) {
+      console.log('│  ' + line.padEnd(52) + '│');
+    }
+    console.log('├──────────────────────────────────────────────────────┤');
+    if (healingCount > 0) {
+      const msg = `  🩹 ${healingCount} reparaci${healingCount === 1 ? 'ón' : 'ones'} realizada${healingCount === 1 ? '' : 's'}`;
+      console.log('│' + msg.padEnd(54) + '│');
+    } else {
+      console.log('│  ✅ Base de datos saludable — 0 reparaciones       │');
+    }
+    console.log('└──────────────────────────────────────────────────────┘');
+
   } catch (error) {
     console.error('❌ Error al inicializar base de datos:', error.message);
     throw error;
